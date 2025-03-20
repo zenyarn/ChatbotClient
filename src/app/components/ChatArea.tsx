@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { sendMessage } from '../lib/api';
 
 interface Message {
@@ -12,6 +12,16 @@ export default function ChatArea() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // 自动滚动到最新消息
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -23,16 +33,53 @@ export default function ChatArea() {
     setIsLoading(true);
 
     try {
-      const response = await sendMessage(userMessage);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: response 
-      }]);
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [...messages, { role: 'user', content: userMessage }],
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('API请求失败');
+      }
+
+      // 初始化空的AI响应
+      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+      
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullResponse = '';
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          console.log('收到chunk:', chunk);
+          fullResponse += chunk;
+
+          // 实时更新最后一条消息
+          setMessages(prev => {
+            const newMessages = [...prev];
+            newMessages[newMessages.length - 1] = {
+              role: 'assistant',
+              content: fullResponse,
+            };
+            return newMessages;
+          });
+        }
+      }
+
     } catch (error) {
       console.error('发送消息错误:', error);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: '抱歉，发生了一些错误。请稍后重试。' 
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '抱歉，发生了一些错误。请稍后重试。'
       }]);
     } finally {
       setIsLoading(false);
@@ -70,11 +117,7 @@ export default function ChatArea() {
                   </div>
                 </div>
               ))}
-              {isLoading && (
-                <div className="text-center text-gray-400">
-                  <div className="animate-pulse">思考中...</div>
-                </div>
-              )}
+              <div ref={messagesEndRef} />
             </div>
           )}
         </div>

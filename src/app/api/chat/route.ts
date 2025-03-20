@@ -18,18 +18,35 @@ export async function POST(req: Request) {
       ...messages
     ];
 
-    const completion = await client.chat.completions.create({
+    const stream = await client.chat.completions.create({
       model: "deepseek-chat",
       messages: fullMessages,
+      stream: true,
+    });
+
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content;
+            if (content) {
+              controller.enqueue(encoder.encode(content));
+            }
+          }
+          controller.close();
+        } catch (error) {
+          controller.error(error);
+        }
+      },
     });
 
     console.log('API响应成功'); // 添加日志
     
-    // 返回完整的响应
-    return new Response(JSON.stringify({
-      content: completion.choices[0].message.content
-    }), {
-      headers: { 'Content-Type': 'application/json' },
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
     });
     
   } catch (error) {
