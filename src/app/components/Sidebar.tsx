@@ -5,7 +5,7 @@ export default function Sidebar() {
     <aside className="w-64 bg-[#202123] h-screen flex flex-col">
       {/* 顶部标题 */}
       <div className="p-4 border-b border-gray-700">
-        <h1 className="text-white text-xl font-semibold">ChatGPT</h1>
+        <h1 className="text-white text-xl font-semibold">DeepSeek</h1>
       </div>
       
       {/* 对话历史列表 */}

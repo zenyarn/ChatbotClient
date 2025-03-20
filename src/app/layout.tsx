@@ -7,6 +7,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <title>DeepSeek AI Chat</title>
+      </head>
       <body>{children}</body>
     </html>
   );
