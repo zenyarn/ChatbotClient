@@ -45,16 +45,25 @@ export default function Sidebar({ selectedConversation, onSelectConversation }: 
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ title: newTitle.trim() }),
+        body: JSON.stringify({ title: newTitle }),
       });
 
-      if (response.ok) {
-        const newConversation = await response.json();
-        setConversations(prev => [...prev, newConversation]);
-        setNewTitle('');
-        setIsCreating(false);
-        onSelectConversation(newConversation.id);
-      }
+      if (!response.ok) throw new Error('Failed to create conversation');
+      
+      const newConversation = await response.json();
+      
+      // 立即更新本地状态
+      setConversations(prev => [...prev, newConversation]);
+      
+      // 选中新创建的会话
+      onSelectConversation(newConversation.id);
+      
+      // 重置创建状态
+      setIsCreating(false);
+      setNewTitle('');
+      
+      // 重新获取会话列表以确保数据同步
+      fetchConversations();
     } catch (error) {
       console.error('Error creating conversation:', error);
     }
@@ -136,7 +145,7 @@ export default function Sidebar({ selectedConversation, onSelectConversation }: 
                 selectedConversation === conversation.id ? 'bg-gray-700' : ''
               }`}
             >
-              <span className="flex-1 truncate">{conversation.title}</span>
+              <span className="flex-1 truncate">{conversation.title || '新对话'}</span>
               <button
                 onClick={(e) => deleteConversation(conversation.id, e)}
                 className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity"
