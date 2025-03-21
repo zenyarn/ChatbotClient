@@ -14,6 +14,7 @@
     "@clerk/nextjs": "^6.12.6",
     "@deepgram/sdk": "^3.6.0",
     "ai": "^3.4.33",
+    "better-sqlite3": "^11.9.1",
     "date-fns": "^3.6.0",
     "firebase": "^10.13.0",
     "framer-motion": "^11.3.31",
@@ -26,6 +27,7 @@
     "replicate": "^0.32.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
