@@ -1,13 +1,23 @@
 'use client';
 
+import { useState } from 'react';
 import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 import ChatArea from './components/ChatArea';
 import Sidebar from './components/Sidebar';
 
 export default function Home() {
+  const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
+
+  const handleSelectConversation = (id: string) => {
+    setSelectedConversation(id || null);
+  };
+
   return (
     <div className="flex h-screen bg-[#1a1a1a]">
-      <Sidebar />
+      <Sidebar 
+        selectedConversation={selectedConversation}
+        onSelectConversation={handleSelectConversation}
+      />
       <main className="flex-1 flex flex-col bg-[#1a1a1a]">
         <div className="flex items-center justify-end p-4 gap-2 border-b border-gray-800 bg-[#1a1a1a]">
           <SignedIn>
@@ -35,7 +45,7 @@ export default function Home() {
             </SignUpButton>
           </SignedOut>
         </div>
-        <ChatArea />
+        <ChatArea conversationId={selectedConversation} />
       </main>
     </div>
   );

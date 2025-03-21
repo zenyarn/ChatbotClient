@@ -1,14 +1,23 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { sendMessage } from '../lib/api';
+import { useAuth } from '@clerk/nextjs';
+import { Send } from 'lucide-react';
 
 interface Message {
-  role: 'user' | 'assistant';
+  id: string;
+  conversationId: string;
   content: string;
+  role: 'user' | 'assistant';
+  createdAt: number;
 }
 
-export default function ChatArea() {
+interface ChatAreaProps {
+  conversationId: string | null;
+}
+
+export default function ChatArea({ conversationId }: ChatAreaProps) {
+  const { isLoaded, userId } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -19,38 +28,95 @@ export default function ChatArea() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // 获取消息历史
+  const fetchMessages = async () => {
+    if (!conversationId) {
+      setMessages([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}/messages`);
+      if (response.ok) {
+        const data = await response.json();
+        setMessages(data);
+      }
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    }
+  };
+
+  // 当会话ID改变时，获取新的消息历史
+  useEffect(() => {
+    if (isLoaded && userId && conversationId) {
+      fetchMessages();
+    }
+  }, [isLoaded, userId, conversationId]);
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || !conversationId) return;
 
     const userMessage = input.trim();
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/chat', {
+      // 发送用户消息到会话
+      const messageResponse = await fetch(`/api/conversations/${conversationId}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: [...messages, { role: 'user', content: userMessage }],
+          content: userMessage,
+          role: 'user'
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('API请求失败');
+      if (!messageResponse.ok) {
+        throw new Error('发送消息失败');
       }
 
-      // 初始化空的AI响应
-      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
-      
-      const reader = response.body?.getReader();
+      // 获取更新后的消息列表
+      await fetchMessages();
+
+      // 准备一个临时的 AI 响应消息
+      const tempAssistantMessage: Message = {
+        id: Date.now().toString(),
+        conversationId,
+        content: '',
+        role: 'assistant',
+        createdAt: Date.now()
+      };
+      setMessages(prev => [...prev, tempAssistantMessage]);
+
+      // 准备发送给 AI 的消息列表，包括最新的用户消息
+      const messagesForAI = [
+        ...messages,
+        { role: 'user' as const, content: userMessage }
+      ];
+
+      // 调用 AI 接口获取流式回复
+      const aiResponse = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: messagesForAI.map(msg => ({ role: msg.role, content: msg.content })),
+        }),
+      });
+
+      if (!aiResponse.ok) {
+        throw new Error('AI响应失败');
+      }
+
+      const reader = aiResponse.body?.getReader();
       const decoder = new TextDecoder();
       let fullResponse = '';
 
@@ -60,26 +126,43 @@ export default function ChatArea() {
           if (done) break;
 
           const chunk = decoder.decode(value);
-          console.log('收到chunk:', chunk);
           fullResponse += chunk;
 
-          // 实时更新最后一条消息
+          // 实时更新 AI 响应
           setMessages(prev => {
             const newMessages = [...prev];
-            newMessages[newMessages.length - 1] = {
-              role: 'assistant',
-              content: fullResponse,
-            };
+            const lastMessage = newMessages[newMessages.length - 1];
+            if (lastMessage && lastMessage.role === 'assistant') {
+              lastMessage.content = fullResponse;
+            }
             return newMessages;
           });
         }
       }
 
+      // 将完整的 AI 响应保存到数据库
+      await fetch(`/api/conversations/${conversationId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: fullResponse,
+          role: 'assistant'
+        }),
+      });
+
+      // 获取最终的消息列表
+      await fetchMessages();
+
     } catch (error) {
       console.error('发送消息错误:', error);
       setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        conversationId,
+        content: '抱歉，发生了一些错误。请稍后重试。',
         role: 'assistant',
-        content: '抱歉，发生了一些错误。请稍后重试。'
+        createdAt: Date.now()
       }]);
     } finally {
       setIsLoading(false);
@@ -91,16 +174,21 @@ export default function ChatArea() {
       {/* 聊天内容区域 */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto py-8">
-          {messages.length === 0 ? (
+          {!conversationId ? (
+            <div className="text-gray-300 text-center">
+              <h1 className="text-2xl font-semibold mb-8">DeepSeek AI</h1>
+              <p className="text-lg">请选择或创建一个会话开始聊天</p>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="text-gray-300 text-center">
               <h1 className="text-2xl font-semibold mb-8">DeepSeek AI</h1>
               <p className="text-lg">有什么可以帮忙的？</p>
             </div>
           ) : (
             <div className="space-y-6">
-              {messages.map((message, index) => (
+              {messages.map((message) => (
                 <div
-                  key={index}
+                  key={message.id}
                   className={`p-4 ${
                     message.role === 'user' 
                       ? 'bg-[#1A1B1E]'
@@ -131,18 +219,16 @@ export default function ChatArea() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="输入任何问题..."
+              placeholder={conversationId ? "输入任何问题..." : "请先选择或创建一个会话"}
               className="w-full bg-[#2A2B32] text-white rounded-lg pl-4 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-gray-500 border border-gray-700"
-              disabled={isLoading}
+              disabled={isLoading || !conversationId}
             />
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !conversationId}
               className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-[#2A2B32] p-1 rounded disabled:opacity-50"
             >
-              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
+              <Send className="w-5 h-5 text-gray-400" />
             </button>
           </div>
           <div className="text-xs text-center text-gray-400 mt-2">
