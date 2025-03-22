@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/nextjs";
 import ChatArea from './components/ChatArea';
 import Sidebar from './components/Sidebar';
@@ -145,20 +145,22 @@ export default function Home() {
         
         {/* 侧边栏内容区域 - 带有滚动条 */}
         <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
-          <Sidebar 
-            selectedConversation={selectedConversation}
-            onSelectConversation={(id) => {
-              setSelectedConversation(id);
-              // 当切换对话时，也尝试立即更新标题
-              const conv = conversations.find(c => c.id === id);
-              if (conv) {
-                setDisplayTitle(conv.title);
-              }
-            }}
-            updateTrigger={sidebarUpdateTrigger}
-            newConversation={enhancedLatestConversation}
-            onConversationDeleted={handleConversationDeleted}
-          />
+          <Suspense fallback={<div className="p-4 text-gray-400">加载中...</div>}>
+            <Sidebar 
+              selectedConversation={selectedConversation}
+              onSelectConversation={(id) => {
+                setSelectedConversation(id);
+                // 当切换对话时，也尝试立即更新标题
+                const conv = conversations.find(c => c.id === id);
+                if (conv) {
+                  setDisplayTitle(conv.title);
+                }
+              }}
+              updateTrigger={sidebarUpdateTrigger}
+              newConversation={enhancedLatestConversation}
+              onConversationDeleted={handleConversationDeleted}
+            />
+          </Suspense>
         </div>
         
         {/* 底部设置按钮 */}
