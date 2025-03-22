@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 'use client';
 
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
@@ -230,12 +232,14 @@ export default function Home() {
           </div>
         </div>
         
-        {/* 聊天区域 */}
-        <ChatArea
-          conversationId={selectedConversation}
-          onConversationCreated={handleConversationCreated}
-          isSignedIn={!!isSignedIn}
-        />
+        {/* 聊天区域 - 添加Suspense包装 */}
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center">加载聊天区域...</div>}>
+          <ChatArea
+            conversationId={selectedConversation}
+            onConversationCreated={handleConversationCreated}
+            isSignedIn={!!isSignedIn}
+          />
+        </Suspense>
       </main>
     </div>
   );

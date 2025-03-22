@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth, SignInButton } from '@clerk/nextjs';
 import { Send, ThumbsUp, ThumbsDown, Copy, Paperclip, Mic, Loader2, Check } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Message } from '@/lib/db';
 import crypto from 'crypto';
 
@@ -43,7 +43,6 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
   // 添加复制反馈状态
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
 
-  const searchParams = useSearchParams();
   const router = useRouter();
 
   // 自动滚动到最新消息
