@@ -228,6 +228,17 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
     }
   };
 
+  // 在useEffect中监听conversationId的变化
+  useEffect(() => {
+    if (conversationId) {
+      // 获取消息的代码保持不变...
+      fetchMessages(conversationId);
+    } else {
+      // 当conversationId为null时，清空消息列表
+      setMessages([]);
+    }
+  }, [conversationId]);
+
   return (
     <div className="flex-1 flex flex-col bg-[#1E1E1E] h-full overflow-hidden">
       {/* 聊天内容区域 */}

@@ -114,6 +114,16 @@ export default function Home() {
     }
   }, [isSignedIn, sidebarUpdateTrigger]);
 
+  // 添加处理删除对话的函数
+  const handleConversationDeleted = useCallback((id: string) => {
+    // 如果删除的是当前选中的对话，则重置选中状态
+    if (id === selectedConversation) {
+      setSelectedConversation(null);
+      // 如果使用了displayTitle状态，也需要重置
+      setDisplayTitle("新对话");
+    }
+  }, [selectedConversation]);
+
   return (
     <div className="flex h-screen bg-[#1E1E1E] overflow-hidden">
       {/* 侧边栏 - 根据展开状态设置宽度 */}
@@ -141,6 +151,7 @@ export default function Home() {
             }}
             updateTrigger={sidebarUpdateTrigger}
             newConversation={latestConversation}
+            onConversationDeleted={handleConversationDeleted}
           />
         </div>
         

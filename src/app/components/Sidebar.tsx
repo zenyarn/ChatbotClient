@@ -16,13 +16,15 @@ interface SidebarProps {
   onSelectConversation: (id: string) => void;
   updateTrigger?: number;
   newConversation: Conversation | null;
+  onConversationDeleted?: (id: string) => void;
 }
 
 export default function Sidebar({ 
   selectedConversation, 
   onSelectConversation, 
   updateTrigger = 0,
-  newConversation
+  newConversation,
+  onConversationDeleted
 }: SidebarProps) {
   const { isLoaded, userId, signOut } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -152,19 +154,30 @@ export default function Sidebar({
   const deleteConversation = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     
+    if (!confirm('确定要删除这个对话吗？')) return;
+    
+    setEditingId(id);
+    
     try {
       const response = await fetch(`/api/conversations/${id}`, {
         method: 'DELETE',
       });
-
+      
       if (response.ok) {
-        setConversations(prev => prev.filter(conv => conv.id !== id));
-        if (selectedConversation === id) {
-          onSelectConversation('');
+        // 删除成功后，从本地状态中移除对话
+        setConversations(prev => prev.filter(c => c.id !== id));
+        
+        // 如果删除的是当前选中的对话，通知父组件
+        if (id === selectedConversation && onConversationDeleted) {
+          onConversationDeleted(id);
         }
+      } else {
+        console.error('Failed to delete conversation');
       }
     } catch (error) {
       console.error('Error deleting conversation:', error);
+    } finally {
+      setEditingId(null);
     }
   };
 
