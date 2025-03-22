@@ -124,6 +124,12 @@ export default function Home() {
     }
   }, [selectedConversation]);
 
+  // 在使用latestConversation前确保它有所有必需的属性
+  const enhancedLatestConversation = latestConversation ? {
+    ...latestConversation,
+    updatedAt: latestConversation.updatedAt || latestConversation.createdAt || Date.now()
+  } : null;
+
   return (
     <div className="flex h-screen overflow-hidden">
       {/* 侧边栏 - 根据展开状态设置宽度 */}
@@ -150,7 +156,7 @@ export default function Home() {
               }
             }}
             updateTrigger={sidebarUpdateTrigger}
-            newConversation={latestConversation}
+            newConversation={enhancedLatestConversation}
             onConversationDeleted={handleConversationDeleted}
           />
         </div>
