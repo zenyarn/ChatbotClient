@@ -46,10 +46,21 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
     }
   };
 
-  // 当会话ID改变时，获取新的消息历史
+  // 添加新的useEffect来监听isSignedIn的变化
+  useEffect(() => {
+    // 当用户登出时(isSignedIn变为false)，清空消息列表
+    if (!isSignedIn) {
+      setMessages([]);
+    }
+  }, [isSignedIn]);
+
+  // 修改现有的useEffect，确保在登录状态变化时响应
   useEffect(() => {
     if (isLoaded && userId && conversationId && isSignedIn) {
       fetchMessages(conversationId);
+    } else if (!isSignedIn) {
+      // 确保在未登录状态下清空消息
+      setMessages([]);
     }
   }, [isLoaded, userId, conversationId, isSignedIn]);
 

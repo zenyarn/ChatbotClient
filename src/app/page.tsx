@@ -18,6 +18,7 @@ export default function Home() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const { isSignedIn, isLoaded } = useAuth();
   const [latestConversation, setLatestConversation] = useState<Conversation | null>(null);
+  const [sidebarUpdateTrigger, setSidebarUpdateTrigger] = useState(0);
   
   // 处理新建对话
   const handleConversationCreated = useCallback((conversationId: string, conversation: Conversation) => {
@@ -26,10 +27,16 @@ export default function Home() {
     setLatestConversation(conversation);
   }, []);
 
-  // 当用户登出时重置对话状态
+  // 增强登出处理逻辑
   useEffect(() => {
-    if (isLoaded && !isSignedIn) {
-      setSelectedConversation(null);
+    if (isLoaded) {
+      if (!isSignedIn) {
+        // 用户登出时：
+        // 1. 清除选中的对话
+        setSelectedConversation(null);
+        // 2. 触发侧边栏更新（虽然在登出状态下不会显示）
+        setSidebarUpdateTrigger(prev => prev + 1);
+      }
     }
   }, [isSignedIn, isLoaded]);
 
