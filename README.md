@@ -107,3 +107,44 @@ CREATE TABLE messages (
 - SQLite for data persistence
 - Firebase Auth, Storage, and Database
 - Multiple AI endpoints including OpenAI, Anthropic, and Replicate using Vercel's AI SDK
+
+## PostgreSQL迁移指南
+
+本项目支持将SQLite数据库迁移到PostgreSQL。以下是迁移步骤：
+
+### 创建Vercel PostgreSQL数据库
+
+1. 登录Vercel控制台，选择你的项目
+2. 点击"Storage"选项卡，然后选择"Connect Database"
+3. 选择"PostgreSQL"，然后按照指引创建数据库实例
+4. 创建完成后，Vercel会自动生成数据库连接信息
+
+### 配置环境变量
+
+将Vercel提供的PostgreSQL连接信息添加到项目的`.env.local`文件中：
+
+```
+POSTGRES_URL=
+POSTGRES_PRISMA_URL=
+POSTGRES_URL_NON_POOLING=
+POSTGRES_USER=
+POSTGRES_HOST=
+POSTGRES_PASSWORD=
+POSTGRES_DATABASE=
+```
+
+### 数据迁移
+
+运行以下命令将现有SQLite数据库的数据迁移到PostgreSQL数据库：
+
+```bash
+npm run db:migrate
+```
+
+此命令会：
+1. 从SQLite数据库导出所有会话和消息数据
+2. 在`db-backup`目录中创建数据备份
+3. 在PostgreSQL中创建必要的数据库表
+4. 将数据导入到PostgreSQL数据库
+
+迁移完成后，你可以在代码中切换数据库连接，使用PostgreSQL替代SQLite。
