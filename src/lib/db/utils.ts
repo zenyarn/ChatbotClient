@@ -7,7 +7,10 @@ import { DbUtils } from './types';
 const USE_POSTGRES = process.env.USE_POSTGRES === 'true' || process.env.NODE_ENV === 'production';
 
 // 选择适当的数据库工具
-export const dbUtils: DbUtils = USE_POSTGRES ? pgUtils : sqliteUtils;
+// export const dbUtils: DbUtils = USE_POSTGRES ? pgUtils : sqliteUtils;
+export const dbUtils = (process.env.NODE_ENV === 'production' || process.env.USE_POSTGRES === 'true')
+  ? pgUtils
+  : sqliteUtils;
 
 // 打印数据库连接信息(仅开发环境)
 if (process.env.NODE_ENV !== 'production') {
