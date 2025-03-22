@@ -60,4 +60,38 @@ export async function DELETE(
         console.error('Error deleting conversation:', error);
         return new NextResponse('Internal Server Error', { status: 500 });
     }
+}
+
+// 添加PATCH方法用于更新会话标题
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
+
+    const { title } = await request.json();
+    if (!title) {
+      return new NextResponse('Title is required', { status: 400 });
+    }
+
+    // 验证会话所有权
+    const conversations = dbUtils.getConversations(userId);
+    const conversation = conversations.find(c => c.id === params.id);
+    
+    if (!conversation) {
+      return new NextResponse('Conversation not found', { status: 404 });
+    }
+
+    // 更新会话标题
+    dbUtils.updateConversationTitle(params.id, title);
+    
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error updating conversation:', error);
+    return new NextResponse('Internal Server Error', { status: 500 });
+  }
 } 

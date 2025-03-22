@@ -94,6 +94,16 @@ export const dbUtils = {
             ORDER BY created_at ASC
         `);
         return stmt.all(conversationId) as Message[];
+    },
+
+    // 新增更新会话标题的函数
+    updateConversationTitle: (conversationId: string, title: string) => {
+        const stmt = db.prepare(`
+            UPDATE conversations
+            SET title = ?, updated_at = ?
+            WHERE id = ?
+        `);
+        stmt.run(title, Date.now(), conversationId);
     }
 };
 

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/nextjs';
-import { Plus, Trash2, Settings, LogOut } from 'lucide-react';
+import { Plus, Trash2, Settings, LogOut, Check, X } from 'lucide-react';
 
 interface Conversation {
   id: string;
@@ -19,9 +19,10 @@ interface SidebarProps {
 export default function Sidebar({ selectedConversation, onSelectConversation }: SidebarProps) {
   const { isLoaded, userId, signOut } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [isCreating, setIsCreating] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-
+  const [editingId, setEditingId] = useState<string | null>(null); // 追踪正在编辑的对话ID
+  const [editingTitle, setEditingTitle] = useState(''); // 存储编辑中的标题
+  const editInputRef = useRef<HTMLInputElement>(null); // 引用编辑输入框
+  
   // 获取会话列表
   const fetchConversations = async () => {
     if (!isLoaded || !userId) {
@@ -40,37 +41,102 @@ export default function Sidebar({ selectedConversation, onSelectConversation }: 
     }
   };
 
-  // 创建新会话
-  const createConversation = async () => {
+  // 更新会话标题
+  const updateConversationTitle = async (id: string, newTitle: string) => {
     if (!newTitle.trim()) return;
     
     try {
-      const response = await fetch('/api/conversations', {
-        method: 'POST',
+      const response = await fetch(`/api/conversations/${id}`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ title: newTitle }),
       });
 
+      if (response.ok) {
+        // 更新本地状态
+        setConversations(prev => 
+          prev.map(conv => 
+            conv.id === id ? { ...conv, title: newTitle } : conv
+          )
+        );
+      } else {
+        throw new Error('Failed to update conversation title');
+      }
+    } catch (error) {
+      console.error('Error updating conversation title:', error);
+    }
+  };
+
+  // 开始编辑会话名称
+  const startEditing = (id: string, currentTitle: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // 阻止触发选择会话
+    setEditingId(id);
+    setEditingTitle(currentTitle);
+    // 等待下一帧DOM更新后聚焦输入框
+    setTimeout(() => {
+      editInputRef.current?.focus();
+      editInputRef.current?.select();
+    }, 0);
+  };
+
+  // 保存编辑
+  const saveEditing = () => {
+    if (editingId) {
+      updateConversationTitle(editingId, editingTitle);
+      setEditingId(null);
+    }
+  };
+
+  // 取消编辑
+  const cancelEditing = () => {
+    setEditingId(null);
+  };
+
+  // 新增自动创建对话的函数
+  const createNewConversation = async () => {
+    try {
+      // 使用时间戳创建默认会话名称
+      const timestamp = new Date().toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      
+      const response = await fetch('/api/conversations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ title: `对话 ${timestamp}` }),
+      });
+
       if (!response.ok) throw new Error('Failed to create conversation');
       
       const newConversation = await response.json();
       
-      // 立即更新本地状态
-      setConversations(prev => [...prev, newConversation]);
-      
       // 选中新创建的会话
       onSelectConversation(newConversation.id);
-      
-      // 重置创建状态
-      setIsCreating(false);
-      setNewTitle('');
       
       // 重新获取会话列表以确保数据同步
       fetchConversations();
     } catch (error) {
       console.error('Error creating conversation:', error);
+    }
+  };
+
+  // 处理键盘事件
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveEditing();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEditing();
     }
   };
 
@@ -119,6 +185,20 @@ export default function Sidebar({ selectedConversation, onSelectConversation }: 
     }
   }, [isLoaded, userId]);
 
+  // 点击文档其他地方时取消编辑
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (editInputRef.current && !editInputRef.current.contains(event.target as Node)) {
+        saveEditing();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [editingId, editingTitle]);
+
   return (
     <aside className="w-64 bg-[#202123] h-screen flex flex-col fixed">
       {/* 顶部标题 */}
@@ -131,51 +211,67 @@ export default function Sidebar({ selectedConversation, onSelectConversation }: 
         <div className="space-y-2">
           {/* 新建会话按钮 */}
           <button
-            onClick={() => setIsCreating(true)}
+            onClick={createNewConversation}
             className="w-full text-gray-300 hover:bg-gray-700 rounded-lg p-2 flex items-center gap-2"
           >
             <Plus size={20} />
             新对话
           </button>
 
-          {/* 新建会话输入框 */}
-          {isCreating && (
-            <div className="p-2 bg-gray-700 rounded-lg">
-              <input
-                type="text"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    createConversation();
-                  } else if (e.key === 'Escape') {
-                    setIsCreating(false);
-                    setNewTitle('');
-                  }
-                }}
-                placeholder="输入会话标题..."
-                className="w-full bg-gray-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gray-500"
-                autoFocus
-              />
-            </div>
-          )}
-
           {/* 会话列表 */}
           {conversations.map((conversation) => (
             <div
               key={conversation.id}
-              onClick={() => onSelectConversation(conversation.id)}
+              onClick={() => editingId !== conversation.id && onSelectConversation(conversation.id)}
               className={`group flex items-center justify-between w-full text-gray-300 hover:bg-gray-700 rounded-lg p-2 cursor-pointer ${
                 selectedConversation === conversation.id ? 'bg-gray-700' : ''
               }`}
             >
-              <span className="flex-1 truncate">{conversation.title || '新对话'}</span>
-              <button
-                onClick={(e) => deleteConversation(conversation.id, e)}
-                className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity"
-              >
-                <Trash2 size={16} />
-              </button>
+              {editingId === conversation.id ? (
+                // 编辑状态
+                <div 
+                  className="flex-1 flex items-center gap-1" 
+                  onClick={e => e.stopPropagation()}
+                >
+                  <input
+                    ref={editInputRef}
+                    type="text"
+                    value={editingTitle}
+                    onChange={(e) => setEditingTitle(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    className="w-full bg-gray-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gray-500"
+                  />
+                  <button 
+                    onClick={saveEditing}
+                    className="text-green-500 hover:text-green-400"
+                  >
+                    <Check size={16} />
+                  </button>
+                  <button 
+                    onClick={cancelEditing}
+                    className="text-red-500 hover:text-red-400"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                // 正常显示状态
+                <span 
+                  className="flex-1 truncate"
+                  onDoubleClick={(e) => startEditing(conversation.id, conversation.title, e)}
+                >
+                  {conversation.title || '新对话'}
+                </span>
+              )}
+              
+              {editingId !== conversation.id && (
+                <button
+                  onClick={(e) => deleteConversation(conversation.id, e)}
+                  className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
             </div>
           ))}
         </div>

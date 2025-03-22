@@ -32,11 +32,18 @@ export default function Home() {
       
       <main className={`flex-1 flex flex-col bg-[#1a1a1a] ${isSignedIn ? 'ml-64' : ''}`}>
         <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-[#1a1a1a]">
-          {/* 未登录时显示产品标题 */}
-          <SignedOut>
-            <h1 className="text-white text-xl font-semibold">DeepSeek 聊天</h1>
-          </SignedOut>
+          {/* 未登录时显示产品标题在左侧 */}
+          <div>
+            <SignedOut>
+              <h1 className="text-white text-xl font-semibold">DeepSeek 聊天</h1>
+            </SignedOut>
+            {/* 登录状态下左侧留空 */}
+            <SignedIn>
+              <div></div>
+            </SignedIn>
+          </div>
           
+          {/* 右侧显示用户按钮和登录选项 */}
           <div className="flex items-center gap-2">
             <SignedIn>
               <UserButton 
