@@ -89,7 +89,7 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ title: `对话 ${timestamp}` }),
+        body: JSON.stringify({ title: timestamp }),
       });
 
       if (!response.ok) throw new Error('Failed to create conversation');
@@ -99,7 +99,7 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
       // 传递完整的对话对象给父组件，而不仅仅是ID
       onConversationCreated(newConversation.id, {
         id: newConversation.id,
-        title: `对话 ${timestamp}`,
+        title: timestamp,
         userId: userId || '',
         createdAt: Date.now()
       });
