@@ -6,16 +6,7 @@ import { Send, ThumbsUp, ThumbsDown, Copy, Paperclip, Mic, Loader2, Check } from
 import { useRouter } from 'next/navigation';
 import { Message } from '@/lib/db';
 import crypto from 'crypto';
-
-// 简单的 markdown 渲染器组件
-const MarkdownRenderer = ({ content }: { content: string }) => {
-  // 非常简单的实现，仅用于应急
-  return (
-    <div className="whitespace-pre-wrap">
-      {content}
-    </div>
-  );
-};
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface ChatAreaProps {
   conversationId: string | null;
@@ -300,10 +291,37 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
         })
       });
       
-      // 确保 actualConversationId 非空
-      if (actualConversationId) {
-        // 刷新消息列表
+      // 修改这里的逻辑，避免对第一条消息进行刷新
+      const isFirstMessage = !conversationId; // 判断是否是第一条消息
+
+      if (!isFirstMessage && actualConversationId) {
+        // 这是后续消息，可以安全刷新消息列表
         fetchMessages(actualConversationId);
+      } else if (isFirstMessage && actualConversationId) {
+        // 这是第一条消息，不刷新消息列表，但更新所有消息的 conversationId
+        setMessages(prevMessages => {
+          return prevMessages.map(msg => {
+            // 更新所有消息的 conversationId 为新创建的 ID
+            return {
+              ...msg,
+              conversationId: actualConversationId
+            };
+          });
+        });
+        
+        // 可选: 在状态更新后立即将更新后的消息保存到本地存储，作为额外备份
+        setTimeout(() => {
+          const updatedMessages = messages.map(msg => ({
+            ...msg,
+            conversationId: actualConversationId
+          }));
+          
+          // 可以选择将更新后的消息存储在本地，以防页面刷新
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(`messages-${actualConversationId}`, 
+              JSON.stringify(updatedMessages));
+          }
+        }, 500);
       }
       
     } catch (error) {
@@ -418,7 +436,8 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
                           message.role === 'user' 
                             ? 'bg-[#262626] text-white rounded-2xl rounded-tr-sm'
                             : 'bg-[#2D2D2D] text-white rounded-2xl rounded-tl-sm'
-                        }`}>
+                        } `}>
+                        {/* } message-content`}> */}
                           {message.role === 'user' ? (
                             <div className="prose prose-invert max-w-none">
                               <div className="whitespace-pre-wrap">

@@ -41,6 +41,8 @@ body {
   border-radius: 6px;
   padding: 1rem;
   overflow-x: auto;
+  /* max-width: 60%; */
+  width: auto;
 }
 
 .prose code {
@@ -190,6 +192,8 @@ body {
 /* 添加代码块字体大小样式 */
 .prose pre code {
   @apply text-[15px];
+  /* white-space: pre;
+  word-wrap: normal; */
 }
 
 /* 仅移除分隔线边框但保持颜色透明 */
@@ -234,3 +238,4 @@ body > div,
 #__next > div {
   background-color: #1E1E1E !important;
 }
+
