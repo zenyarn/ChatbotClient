@@ -87,38 +87,31 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
     scrollToBottom();
   }, [messages]);
 
-  const createNewConversation = async () => {
+  const createNewConversation = async (initialMessage?: string) => {
     if (!isSignedIn) {
       return tempSessionId;
     }
     
     try {
-      // 使用时间戳创建会话名称
-      const timestamp = new Date().toLocaleString('zh-CN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      });
+      // 使用提供的初始消息或默认值作为标题
+      const title = initialMessage || "新对话";
       
       const response = await fetch('/api/conversations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ title: timestamp }),
+        body: JSON.stringify({ title }),
       });
 
       if (!response.ok) throw new Error('Failed to create conversation');
       
       const newConversation = await response.json();
       
-      // 传递完整的对话对象给父组件，而不仅仅是ID
+      // 传递完整的对话对象给父组件
       onConversationCreated(newConversation.id, {
         id: newConversation.id,
-        title: timestamp,
+        title: title, // 使用我们设置的标题
         userId: userId || '',
         createdAt: Date.now()
       });
@@ -166,101 +159,160 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim()) return;
-
-    const messageToSend = newMessage;
-    setNewMessage('');
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || isLoading) return;
+    
+    // 获取当前会话ID
+    const currentConversationId = conversationId || tempSessionId;
+    
+    // 设置加载状态
     setIsLoading(true);
-
+    
+    // 创建新消息对象(用户消息)
+    const userMessage = {
+      id: `temp-${Date.now()}`,
+      content: newMessage,
+      role: 'user' as 'user',
+      conversationId: currentConversationId || '',
+      createdAt: Date.now()
+    };
+    
+    // 添加到消息列表
+    setMessages(prev => [...prev, userMessage]);
+    
+    // 清空输入框
+    setNewMessage('');
+    
     try {
-      // 确保有会话 ID
-      const currentConversationId = conversationId || await createNewConversation();
-
-      // 添加用户消息到本地状态
-      const userMessage: Message = {
-        id: `local-${Date.now()}`,
-        conversationId: currentConversationId,
-        content: messageToSend,
-        role: 'user',
+      // 如果没有会话ID，创建新会话
+      let actualConversationId = conversationId;
+      if (!conversationId) {
+        // 使用用户消息作为会话标题，限制长度以避免过长
+        const conversationTitle = newMessage.length > 50 
+          ? `${newMessage.substring(0, 47)}...` 
+          : newMessage;
+        
+        const res = await fetch('/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: conversationTitle })
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          actualConversationId = data.id;
+          // 确保传递正确的标题给父组件
+          onConversationCreated(data.id, {
+            ...data,
+            title: conversationTitle // 确保使用我们设置的标题
+          });
+        } else {
+          throw new Error('创建会话失败');
+        }
+      }
+      
+      // 保存用户消息到数据库
+      await fetch(`/api/conversations/${actualConversationId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: newMessage,
+          role: 'user'
+        })
+      });
+      
+      // 创建临时AI消息对象
+      const tempAiMessage = {
+        id: `temp-ai-${Date.now()}`,
+        content: '',
+        role: 'assistant' as 'assistant',
+        conversationId: actualConversationId || '',
         createdAt: Date.now()
       };
       
-      setMessages(prevMessages => [...prevMessages, userMessage]);
+      // 添加临时AI消息到列表
+      setMessages(prev => [...prev, tempAiMessage]);
       
-      // 如果用户已登录，则保存用户消息到数据库
-      if (isSignedIn) {
-        const userMessageResponse = await fetch(`/api/conversations/${currentConversationId}/messages`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            content: messageToSend,
-            role: 'user',
-          }),
-        });
-
-        if (!userMessageResponse.ok) throw new Error('Failed to send user message');
-
-        // 获取更新后的消息列表
-        await fetchMessages(currentConversationId);
+      // 修改消息转换和连接部分
+      const messagesToSend = [
+        ...messages.filter(msg => msg.conversationId === actualConversationId),
+        { role: 'user' as 'user', content: newMessage }
+      ].map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+      
+      // 发送请求到我们的API，使用流式处理
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: messagesToSend }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('AI回复失败');
       }
-
-      // 获取 AI 响应
-      const aiResponse = await chatWithAI(messageToSend);
+      
+      // 处理流式响应
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('无法读取响应');
+      
+      // 累积的响应内容
+      let accumulatedContent = '';
+      
+      // 处理响应流
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) {
+          break;
+        }
+        
+        // 解码并添加到累积内容
+        const chunk = new TextDecoder().decode(value);
+        accumulatedContent += chunk;
+        
+        // 更新消息列表中AI的回复内容
+        setMessages(prevMessages => {
+          const updatedMessages = [...prevMessages];
+          const aiMessageIndex = updatedMessages.findIndex(
+            msg => msg.id === tempAiMessage.id
+          );
+          
+          if (aiMessageIndex !== -1) {
+            updatedMessages[aiMessageIndex] = {
+              ...updatedMessages[aiMessageIndex],
+              content: accumulatedContent
+            };
+          }
+          
+          return updatedMessages;
+        });
+      }
       
       // 保存AI回复到数据库
-      if (isSignedIn) {
-        const saveResponse = await fetch(`/api/conversations/${currentConversationId}/messages`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            content: aiResponse,
-            role: 'assistant'
-          }),
-        });
-        
-        if (!saveResponse.ok) throw new Error('保存AI回复失败');
-        
-        const { id: aiMessageId } = await saveResponse.json();
-        
-        // 更新消息列表
-        await fetchMessages(currentConversationId);
-      } else {
-        // 未登录用户，直接在本地添加AI回复
-        setMessages(prev => [...prev, {
-          id: `ai-${Date.now()}`,
-          conversationId: currentConversationId,
-          content: aiResponse,
-          role: 'assistant',
-          createdAt: Date.now()
-        }]);
-      }
-    } catch (error) {
-      console.error('处理消息失败:', error);
-      alert('发送消息失败，请重试');
+      await fetch(`/api/conversations/${actualConversationId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: accumulatedContent,
+          role: 'assistant'
+        })
+      });
       
-      // 回滚
-      setMessages(prev => prev.filter(m => m.content !== messageToSend));
+      // 确保 actualConversationId 非空
+      if (actualConversationId) {
+        // 刷新消息列表
+        fetchMessages(actualConversationId);
+      }
+      
+    } catch (error) {
+      console.error('发送消息错误:', error);
+      alert('发送消息失败，请重试');
     } finally {
       setIsLoading(false);
     }
   };
-
-  // 在useEffect中监听conversationId的变化
-  useEffect(() => {
-    if (conversationId) {
-      // 获取消息的代码保持不变...
-      fetchMessages(conversationId);
-    } else {
-      // 当conversationId为null时，清空消息列表
-      setMessages([]);
-    }
-  }, [conversationId]);
 
   // 点赞/点踩/复制按钮处理函数
   const handleLike = (messageId: string) => {
@@ -433,7 +485,7 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
       {/* 输入框区域 */}
       <div className="border-t border-gray-800 bg-[#1E1E1E] p-3">
         <div className="max-w-3xl mx-auto">
-          <form onSubmit={handleSubmit} className="relative">
+          <form onSubmit={handleSendMessage} className="relative">
             <div className="rounded-lg border border-gray-700 bg-[#252525] overflow-hidden focus-within:border-gray-500 transition-colors">
               <textarea
                 value={newMessage}
@@ -445,7 +497,7 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    if (newMessage.trim()) handleSubmit(e);
+                    if (newMessage.trim()) handleSendMessage();
                   }
                 }}
               />
