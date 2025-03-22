@@ -2,28 +2,30 @@ import { Pool } from 'pg';
 import crypto from 'crypto';
 import { Conversation, Message, DbUtils } from './types';
 
+// 从环境变量获取PostgreSQL连接URL
+const connectionString = process.env.POSTGRES_URL;
+
+if (!connectionString) {
+  console.error('PostgreSQL连接URL未设置！请设置POSTGRES_URL环境变量');
+}
+
 // 创建连接池
-let pool: Pool;
+const pool = new Pool({
+  connectionString,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
 
-export function getPool() {
-  if (!pool) {
-    pool = new Pool({
-      connectionString: process.env.POSTGRES_URL,
-      ssl: {
-        rejectUnauthorized: false, // 允许自签名证书
-      },
-    });
-  }
-  return pool;
-}
-
-// 初始化数据库连接
-try {
-  getPool();
+// 连接成功时打印信息
+pool.on('connect', () => {
   console.log('PostgreSQL连接初始化成功');
-} catch (error) {
-  console.error('PostgreSQL连接初始化失败:', error);
-}
+});
+
+// 连接错误时打印详细信息
+pool.on('error', (err) => {
+  console.error('PostgreSQL连接错误:', err);
+  console.error('连接字符串:', connectionString ? '已设置（隐藏详情）' : '未设置');
+  console.error('环境:', process.env.NODE_ENV);
+});
 
 // 简单的内存缓存实现
 const conversationsCache = new Map<string, Conversation[]>();
