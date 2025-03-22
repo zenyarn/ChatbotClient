@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAuth, SignInButton } from '@clerk/nextjs';
-import { Send, ThumbsUp, ThumbsDown, Copy, Paperclip, Mic, Loader2 } from 'lucide-react';
+import { Send, ThumbsUp, ThumbsDown, Copy, Paperclip, Mic, Loader2, Check } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -18,6 +18,13 @@ interface ChatAreaProps {
   isSignedIn: boolean;
 }
 
+// 添加新的接口来追踪消息反馈状态
+interface MessageFeedback {
+  messageId: string;
+  liked: boolean;
+  disliked: boolean;
+}
+
 export default function ChatArea({ conversationId, onConversationCreated, isSignedIn }: ChatAreaProps) {
   const { isLoaded, userId } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -25,6 +32,11 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [tempSessionId] = useState(`temp-${Date.now()}`);
+
+  // 添加新的状态来追踪消息反馈
+  const [messageFeedback, setMessageFeedback] = useState<MessageFeedback[]>([]);
+  // 添加复制反馈状态
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
 
   // 自动滚动到最新消息
   const scrollToBottom = () => {
@@ -239,6 +251,70 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
     }
   }, [conversationId]);
 
+  // 添加处理点赞的函数
+  const handleLike = (messageId: string) => {
+    setMessageFeedback(prev => {
+      // 查找当前消息的反馈状态
+      const existingFeedback = prev.find(f => f.messageId === messageId);
+      
+      if (existingFeedback) {
+        // 如果已有反馈状态，则切换点赞状态
+        return prev.map(f => 
+          f.messageId === messageId 
+            ? { ...f, liked: !f.liked, disliked: false } // 确保点赞时取消点踩
+            : f
+        );
+      } else {
+        // 如果没有反馈状态，则添加一个新的
+        return [...prev, { messageId, liked: true, disliked: false }];
+      }
+    });
+  };
+
+  // 处理点踩的函数
+  const handleDislike = (messageId: string) => {
+    setMessageFeedback(prev => {
+      const existingFeedback = prev.find(f => f.messageId === messageId);
+      
+      if (existingFeedback) {
+        return prev.map(f => 
+          f.messageId === messageId 
+            ? { ...f, disliked: !f.disliked, liked: false } // 确保点踩时取消点赞
+            : f
+        );
+      } else {
+        return [...prev, { messageId, liked: false, disliked: true }];
+      }
+    });
+  };
+
+  // 处理复制的函数
+  const handleCopy = (messageId: string, content: string) => {
+    // 复制文本到剪贴板
+    navigator.clipboard.writeText(content)
+      .then(() => {
+        // 设置复制成功的消息ID
+        setCopiedMessageId(messageId);
+        
+        // 2秒后重置复制状态
+        setTimeout(() => {
+          setCopiedMessageId(null);
+        }, 2000);
+      })
+      .catch(err => {
+        console.error('Failed to copy text: ', err);
+      });
+  };
+
+  // 检查消息反馈状态的辅助函数
+  const getMessageFeedback = (messageId: string) => {
+    return messageFeedback.find(f => f.messageId === messageId) || { 
+      messageId, 
+      liked: false, 
+      disliked: false 
+    };
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-[#1E1E1E] h-full overflow-hidden">
       {/* 聊天内容区域 */}
@@ -286,7 +362,12 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
             </div>
           ) : (
             <div className="space-y-6">
-              {messages.map((message, index) => (
+              {messages.map((message, index) => {
+                // 获取当前消息的反馈状态
+                const feedback = getMessageFeedback(message.id);
+                const isCopied = copiedMessageId === message.id;
+                
+                return (
                 <div
                   key={message.id}
                   className={`flex items-start ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -317,17 +398,44 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
                           </div>
                         </div>
                         
-                        {/* 交互按钮 */}
+                        {/* 交互按钮 - 更新为有功能的版本 */}
                         {message.role === 'assistant' && (
                           <div className="flex items-center mt-2 gap-2 px-1">
-                            <button className="p-1 text-gray-500 hover:text-white rounded transition-colors">
+                            <button 
+                              onClick={() => handleLike(message.id)}
+                              className={`p-1 rounded transition-colors ${
+                                feedback.liked 
+                                  ? 'text-blue-500 bg-blue-500 bg-opacity-10' 
+                                  : 'text-gray-500 hover:text-white'
+                              }`}
+                              aria-label="点赞"
+                              title="点赞"
+                            >
                               <ThumbsUp size={14} />
                             </button>
-                            <button className="p-1 text-gray-500 hover:text-white rounded transition-colors">
+                            <button 
+                              onClick={() => handleDislike(message.id)}
+                              className={`p-1 rounded transition-colors ${
+                                feedback.disliked 
+                                  ? 'text-red-500 bg-red-500 bg-opacity-10' 
+                                  : 'text-gray-500 hover:text-white'
+                              }`}
+                              aria-label="点踩"
+                              title="点踩"
+                            >
                               <ThumbsDown size={14} />
                             </button>
-                            <button className="p-1 text-gray-500 hover:text-white rounded transition-colors">
-                              <Copy size={14} />
+                            <button 
+                              onClick={() => handleCopy(message.id, message.content)}
+                              className={`p-1 rounded transition-colors ${
+                                isCopied
+                                  ? 'text-green-500 bg-green-500 bg-opacity-10' 
+                                  : 'text-gray-500 hover:text-white'
+                              }`}
+                              aria-label="复制"
+                              title="复制消息"
+                            >
+                              {isCopied ? <Check size={14} /> : <Copy size={14} />}
                             </button>
                           </div>
                         )}
@@ -335,7 +443,7 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
                     </div>
                   </div>
                 </div>
-              ))}
+              )})}
               <div ref={messagesEndRef} />
             </div>
           )}
