@@ -114,39 +114,52 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
     }
   };
 
-  // 简单的AI聊天函数
-  const chatWithAI = async (message: string): Promise<string> => {
+  // 改进流式处理
+  const streamAIResponse = async (response: Response, tempAiMessage: Message) => {
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('无法读取响应');
+    
+    let accumulatedContent = '';
+    
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: [...messages, { role: 'user', content: message }],
-        }),
-      });
-
-      if (!response.ok) throw new Error('AI响应失败');
-      
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let aiResponse = '';
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) break;
+        
+        const chunk = new TextDecoder().decode(value);
+        
+        // 过滤掉可能的心跳信号
+        const filteredChunk = chunk.replace(/<!-- keep-alive -->/g, '');
+        if (filteredChunk.trim()) {
+          accumulatedContent += filteredChunk;
           
-          const chunk = decoder.decode(value);
-          aiResponse += chunk;
+          // 批量更新UI
+          setMessages(prevMessages => {
+            const updatedMessages = [...prevMessages];
+            const aiMessageIndex = updatedMessages.findIndex(
+              msg => msg.id === tempAiMessage.id
+            );
+            
+            if (aiMessageIndex !== -1) {
+              updatedMessages[aiMessageIndex] = {
+                ...updatedMessages[aiMessageIndex],
+                content: accumulatedContent
+              };
+            }
+            
+            return updatedMessages;
+          });
         }
+        
+        // 小延迟确保UI渲染
+        await new Promise(resolve => setTimeout(resolve, 10));
       }
-      
-      return aiResponse;
+      return accumulatedContent;
     } catch (error) {
-      console.error('AI响应出错:', error);
-      return "抱歉，AI响应出现错误。请稍后再试。";
+      console.error('流式处理错误:', error);
+      // 即使错误也返回已累积的内容
+      return accumulatedContent;
     }
   };
 
@@ -245,41 +258,7 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
       }
       
       // 处理流式响应
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('无法读取响应');
-      
-      // 累积的响应内容
-      let accumulatedContent = '';
-      
-      // 处理响应流
-      while (true) {
-        const { done, value } = await reader.read();
-        
-        if (done) {
-          break;
-        }
-        
-        // 解码并添加到累积内容
-        const chunk = new TextDecoder().decode(value);
-        accumulatedContent += chunk;
-        
-        // 更新消息列表中AI的回复内容
-        setMessages(prevMessages => {
-          const updatedMessages = [...prevMessages];
-          const aiMessageIndex = updatedMessages.findIndex(
-            msg => msg.id === tempAiMessage.id
-          );
-          
-          if (aiMessageIndex !== -1) {
-            updatedMessages[aiMessageIndex] = {
-              ...updatedMessages[aiMessageIndex],
-              content: accumulatedContent
-            };
-          }
-          
-          return updatedMessages;
-        });
-      }
+      const accumulatedContent = await streamAIResponse(response, tempAiMessage);
       
       // 保存AI回复到数据库
       await fetch(`/api/conversations/${actualConversationId}/messages`, {
