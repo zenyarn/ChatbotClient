@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { dbUtils } from '@/lib/db';
+import { Conversation } from '@/lib/db';
 
 // 获取指定会话的消息列表
 export async function GET(
@@ -15,7 +16,7 @@ export async function GET(
 
         // 验证会话所有权
         const conversations = await dbUtils.getConversations(userId);
-        const conversation = conversations.find(c => c.id === params.id);
+        const conversation = conversations.find((c: Conversation) => c.id === params.id);
         
         if (!conversation) {
             return new NextResponse('Conversation not found', { status: 404 });
@@ -42,7 +43,7 @@ export async function POST(
 
         // 验证会话所有权
         const conversations = await dbUtils.getConversations(userId);
-        const conversation = conversations.find(c => c.id === params.id);
+        const conversation = conversations.find((c: Conversation) => c.id === params.id);
         
         if (!conversation) {
             return new NextResponse('Conversation not found', { status: 404 });
