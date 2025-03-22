@@ -14,14 +14,22 @@ interface Conversation {
 interface SidebarProps {
   selectedConversation: string | null;
   onSelectConversation: (id: string) => void;
+  updateTrigger?: number;
+  newConversation: Conversation | null;
 }
 
-export default function Sidebar({ selectedConversation, onSelectConversation }: SidebarProps) {
+export default function Sidebar({ 
+  selectedConversation, 
+  onSelectConversation, 
+  updateTrigger = 0,
+  newConversation
+}: SidebarProps) {
   const { isLoaded, userId, signOut } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null); // 追踪正在编辑的对话ID
   const [editingTitle, setEditingTitle] = useState(''); // 存储编辑中的标题
   const editInputRef = useRef<HTMLInputElement>(null); // 引用编辑输入框
+  const latestConversationRef = useRef<Conversation | null>(null);
   
   // 获取会话列表
   const fetchConversations = async () => {
@@ -177,6 +185,7 @@ export default function Sidebar({ selectedConversation, onSelectConversation }: 
   useEffect(() => {
     if (isLoaded) {
       if (userId) {
+        // 仅当没有新对话时才完全刷新列表
         fetchConversations();
       } else {
         // 如果没有用户ID，清空会话列表
@@ -184,6 +193,23 @@ export default function Sidebar({ selectedConversation, onSelectConversation }: 
       }
     }
   }, [isLoaded, userId]);
+  
+  // 添加新的useEffect来处理新对话的添加
+  useEffect(() => {
+    // 当updateTrigger变化且有newConversation时，直接将新对话添加到列表中
+    if (updateTrigger > 0 && latestConversationRef.current) {
+      const newConv = latestConversationRef.current;
+      
+      // 检查对话是否已存在
+      if (!conversations.some(conv => conv.id === newConv.id)) {
+        // 平滑添加新对话到列表顶部
+        setConversations(prev => [newConv, ...prev]);
+      }
+      
+      // 清空引用以避免重复添加
+      latestConversationRef.current = null;
+    }
+  }, [updateTrigger]);
 
   // 点击文档其他地方时取消编辑
   useEffect(() => {
@@ -198,6 +224,20 @@ export default function Sidebar({ selectedConversation, onSelectConversation }: 
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [editingId, editingTitle]);
+
+  // 添加处理新对话的useEffect
+  useEffect(() => {
+    // 当收到新对话时，将其添加到列表顶部
+    if (newConversation && newConversation.id) {
+      // 检查是否已存在该对话
+      const exists = conversations.some(conv => conv.id === newConversation.id);
+      
+      if (!exists) {
+        // 使用函数式更新确保获取最新状态
+        setConversations(prev => [newConversation, ...prev]);
+      }
+    }
+  }, [newConversation]);
 
   return (
     <aside className="w-64 bg-[#202123] h-screen flex flex-col fixed">
@@ -225,7 +265,7 @@ export default function Sidebar({ selectedConversation, onSelectConversation }: 
               onClick={() => editingId !== conversation.id && onSelectConversation(conversation.id)}
               className={`group flex items-center justify-between w-full text-gray-300 hover:bg-gray-700 rounded-lg p-2 cursor-pointer ${
                 selectedConversation === conversation.id ? 'bg-gray-700' : ''
-              }`}
+              } transition-all duration-200 ease-in-out animate-fadeIn`}
             >
               {editingId === conversation.id ? (
                 // 编辑状态

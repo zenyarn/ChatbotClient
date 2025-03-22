@@ -14,7 +14,7 @@ interface Message {
 
 interface ChatAreaProps {
   conversationId: string | null;
-  onConversationCreated: (conversationId: string) => void;
+  onConversationCreated: (conversationId: string, conversation: { id: string; title: string; userId: string; createdAt: number }) => void;
   isSignedIn: boolean;
 }
 
@@ -84,7 +84,15 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
       if (!response.ok) throw new Error('Failed to create conversation');
       
       const newConversation = await response.json();
-      onConversationCreated(newConversation.id);
+      
+      // 传递完整的对话对象给父组件，而不仅仅是ID
+      onConversationCreated(newConversation.id, {
+        id: newConversation.id,
+        title: `对话 ${timestamp}`,
+        userId: userId || '',
+        createdAt: Date.now()
+      });
+      
       return newConversation.id;
     } catch (error) {
       console.error('Error creating conversation:', error);

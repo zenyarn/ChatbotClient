@@ -1,17 +1,30 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/nextjs";
 import ChatArea from './components/ChatArea';
 import Sidebar from './components/Sidebar';
 
+// 定义Conversation类型
+interface Conversation {
+  id: string;
+  title: string;
+  userId: string;
+  createdAt: number;
+  updatedAt?: number;
+}
+
 export default function Home() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const { isSignedIn, isLoaded } = useAuth();
-
-  const handleConversationCreated = (newConversationId: string) => {
-    setSelectedConversation(newConversationId);
-  };
+  const [latestConversation, setLatestConversation] = useState<Conversation | null>(null);
+  
+  // 处理新建对话
+  const handleConversationCreated = useCallback((conversationId: string, conversation: Conversation) => {
+    setSelectedConversation(conversationId);
+    // 直接设置最新对话，不需要触发fetch
+    setLatestConversation(conversation);
+  }, []);
 
   // 当用户登出时重置对话状态
   useEffect(() => {
@@ -27,6 +40,7 @@ export default function Home() {
         <Sidebar 
           selectedConversation={selectedConversation}
           onSelectConversation={setSelectedConversation}
+          newConversation={latestConversation}
         />
       </SignedIn>
       
