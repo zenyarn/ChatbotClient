@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth, SignInButton } from '@clerk/nextjs';
 import { Send, ThumbsUp, ThumbsDown, Copy, Paperclip, Mic, Loader2, Check } from 'lucide-react';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface Message {
   id: string;
@@ -386,16 +387,20 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
                       
                       {/* 消息内容 */}
                       <div>
-                        <div className={`p-4 ${
+                        <div className={`p-2 ${
                           message.role === 'user' 
                             ? 'bg-[#262626] text-white rounded-2xl rounded-tr-sm'
                             : 'bg-[#2D2D2D] text-white rounded-2xl rounded-tl-sm'
                         }`}>
-                          <div className="prose prose-invert max-w-none">
-                            <div className="whitespace-pre-wrap">
-                              {message.content}
+                          {message.role === 'user' ? (
+                            <div className="prose prose-invert max-w-none">
+                              <div className="whitespace-pre-wrap">
+                                {message.content}
+                              </div>
                             </div>
-                          </div>
+                          ) : (
+                            <MarkdownRenderer content={message.content} />
+                          )}
                         </div>
                         
                         {/* 交互按钮 - 更新为有功能的版本 */}

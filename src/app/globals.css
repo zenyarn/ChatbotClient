@@ -119,3 +119,74 @@ body {
   scrollbar-width: thin;
   scrollbar-color: rgba(107, 114, 128, 0.5) transparent;
 }
+
+/* 修改Markdown样式支持 */
+.prose {
+  @apply text-gray-200 space-y-px;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  @apply text-white font-semibold mb-1.5 mt-2.5;
+}
+
+.prose h1 {
+  @apply text-2xl;
+}
+
+.prose h2 {
+  @apply text-xl;
+}
+
+.prose h3 {
+  @apply text-lg;
+}
+
+.prose p {
+  @apply my-0.5;
+}
+
+.prose ul, .prose ol {
+  @apply my-2 pl-6;
+}
+
+.prose li {
+  @apply my-1;
+}
+
+.prose ul > li {
+  @apply list-disc;
+}
+
+.prose ol > li {
+  @apply list-decimal;
+}
+
+.prose blockquote {
+  @apply italic border-l-4 border-gray-600 pl-4 py-1 my-2 bg-gray-800 bg-opacity-50 rounded-r;
+}
+
+.prose hr {
+  @apply my-4 border-gray-700;
+}
+
+.prose img {
+  @apply max-w-full rounded;
+}
+
+.prose code:not(pre code) {
+  @apply bg-[#2a2a2a] text-gray-200 py-0.5 px-1 rounded;
+}
+
+.prose pre {
+  @apply rounded-md overflow-auto my-0.5 bg-transparent !border-0;
+}
+
+.prose > * + pre,
+.prose > pre + * {
+  @apply mt-0.5 mb-0.5;
+}
+
+/* 添加代码块字体大小样式 */
+.prose pre code {
+  @apply text-[15px];
+}
