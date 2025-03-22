@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { Plus, Trash2, Settings, LogOut, Check, X } from 'lucide-react';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Conversation } from '@/lib/db';
 import { IoMdAdd, IoMdSettings, IoMdTrash } from 'react-icons/io';
 import { IoExitOutline } from 'react-icons/io5';
@@ -33,8 +33,6 @@ export default function Sidebar({
   const latestConversationRef = useRef<Conversation | null>(null);
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const currentId = searchParams.get('id');
   const [loading, setLoading] = useState(true);
   
   // 获取会话列表
@@ -181,8 +179,8 @@ export default function Sidebar({
         if (id === selectedConversation && onConversationDeleted) {
           onConversationDeleted(id);
         }
-        // 如果删除的是当前会话，则导航到首页
-        if (currentId === id) {
+        // 使用selectedConversation代替currentId
+        if (id === selectedConversation) {
           router.push('/');
         }
       } else {

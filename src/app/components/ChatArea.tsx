@@ -131,21 +131,9 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
     }
   };
 
-  // 修改chatWithAI函数来处理流式响应
+  // 简单的AI聊天函数
   const chatWithAI = async (message: string): Promise<string> => {
     try {
-      // 创建一个临时的AI消息ID
-      const tempAiMessageId = `temp-ai-${Date.now()}`;
-      
-      // 添加一个临时的AI回复消息，内容为空
-      setMessages(prev => [...prev, {
-        id: tempAiMessageId,
-        conversationId: conversationId || '',
-        content: '',
-        role: 'assistant',
-        createdAt: Date.now()
-      }]);
-      
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -158,31 +146,17 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
 
       if (!response.ok) throw new Error('AI响应失败');
       
-      // 准备处理流式响应
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let aiResponse = '';
 
       if (reader) {
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            
-            const chunk = decoder.decode(value);
-            aiResponse += chunk;
-            
-            // 更新临时消息的内容，实现流式显示
-            setMessages(prev => 
-              prev.map(m => 
-                m.id === tempAiMessageId 
-                  ? { ...m, content: aiResponse } 
-                  : m
-              )
-            );
-          }
-        } catch (error) {
-          console.error('读取流时出错:', error);
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value);
+          aiResponse += chunk;
         }
       }
       
@@ -193,7 +167,6 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
     }
   };
 
-  // 修改handleSubmit函数，简化处理流式响应的逻辑
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
@@ -231,13 +204,16 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
         });
 
         if (!userMessageResponse.ok) throw new Error('Failed to send user message');
+
+        // 获取更新后的消息列表
+        await fetchMessages(currentConversationId);
       }
 
-      // 获取 AI 响应 (这里已经会将临时消息添加到UI中)
+      // 获取 AI 响应
       const aiResponse = await chatWithAI(messageToSend);
       
-      // 保存完整的AI回复到数据库（如果用户已登录）
-      if (isSignedIn && aiResponse) {
+      // 保存AI回复到数据库
+      if (isSignedIn) {
         const saveResponse = await fetch(`/api/conversations/${currentConversationId}/messages`, {
           method: 'POST',
           headers: {
@@ -251,26 +227,26 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
         
         if (!saveResponse.ok) throw new Error('保存AI回复失败');
         
-        // 获取真实的消息ID，但不需要更新UI，因为流式响应已经显示完成
-        await saveResponse.json();
+        const { id: aiMessageId } = await saveResponse.json();
         
-        // 重新获取消息列表，确保数据同步
+        // 更新消息列表
         await fetchMessages(currentConversationId);
+      } else {
+        // 未登录用户，直接在本地添加AI回复
+        setMessages(prev => [...prev, {
+          id: `ai-${Date.now()}`,
+          conversationId: currentConversationId,
+          content: aiResponse,
+          role: 'assistant',
+          createdAt: Date.now()
+        }]);
       }
     } catch (error) {
       console.error('处理消息失败:', error);
       alert('发送消息失败，请重试');
       
-      // 回滚，移除最后两条消息（用户消息和AI回复）
-      setMessages(prev => {
-        if (prev.length >= 2) {
-          return prev.slice(0, -2);
-        }
-        if (prev.length === 1) {
-          return [];
-        }
-        return prev;
-      });
+      // 回滚
+      setMessages(prev => prev.filter(m => m.content !== messageToSend));
     } finally {
       setIsLoading(false);
     }
