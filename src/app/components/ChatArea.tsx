@@ -15,14 +15,16 @@ interface Message {
 interface ChatAreaProps {
   conversationId: string | null;
   onConversationCreated: (conversationId: string) => void;
+  isSignedIn: boolean;
 }
 
-export default function ChatArea({ conversationId, onConversationCreated }: ChatAreaProps) {
+export default function ChatArea({ conversationId, onConversationCreated, isSignedIn }: ChatAreaProps) {
   const { isLoaded, userId } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [tempSessionId] = useState(`temp-${Date.now()}`);
 
   // 自动滚动到最新消息
   const scrollToBottom = () => {
@@ -31,6 +33,8 @@ export default function ChatArea({ conversationId, onConversationCreated }: Chat
 
   // 获取消息历史
   const fetchMessages = async (conversationId: string) => {
+    if (!isSignedIn) return;
+    
     try {
       const response = await fetch(`/api/conversations/${conversationId}/messages`);
       if (response.ok) {
@@ -44,16 +48,20 @@ export default function ChatArea({ conversationId, onConversationCreated }: Chat
 
   // 当会话ID改变时，获取新的消息历史
   useEffect(() => {
-    if (isLoaded && userId && conversationId) {
+    if (isLoaded && userId && conversationId && isSignedIn) {
       fetchMessages(conversationId);
     }
-  }, [isLoaded, userId, conversationId]);
+  }, [isLoaded, userId, conversationId, isSignedIn]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
   const createNewConversation = async () => {
+    if (!isSignedIn) {
+      return tempSessionId;
+    }
+    
     try {
       // 使用时间戳创建会话名称
       const timestamp = new Date().toLocaleString('zh-CN', {
@@ -96,22 +104,35 @@ export default function ChatArea({ conversationId, onConversationCreated }: Chat
       // 确保有会话 ID
       const currentConversationId = conversationId || await createNewConversation();
 
-      // 发送用户消息
-      const userMessageResponse = await fetch(`/api/conversations/${currentConversationId}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          content: messageToSend,
-          role: 'user',
-        }),
-      });
+      // 添加用户消息到本地状态
+      const userMessage: Message = {
+        id: `local-${Date.now()}`,
+        conversationId: currentConversationId,
+        content: messageToSend,
+        role: 'user',
+        createdAt: Date.now()
+      };
+      
+      setMessages(prevMessages => [...prevMessages, userMessage]);
+      
+      // 如果用户已登录，则保存用户消息到数据库
+      if (isSignedIn) {
+        const userMessageResponse = await fetch(`/api/conversations/${currentConversationId}/messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            content: messageToSend,
+            role: 'user',
+          }),
+        });
 
-      if (!userMessageResponse.ok) throw new Error('Failed to send user message');
+        if (!userMessageResponse.ok) throw new Error('Failed to send user message');
 
-      // 获取更新后的消息列表
-      await fetchMessages(currentConversationId);
+        // 获取更新后的消息列表
+        await fetchMessages(currentConversationId);
+      }
 
       // 获取 AI 响应
       const response = await fetch('/api/chat', {
@@ -162,20 +183,23 @@ export default function ChatArea({ conversationId, onConversationCreated }: Chat
           });
         }
 
-        // 流式响应结束后，保存最终消息
-        await fetch(`/api/conversations/${currentConversationId}/messages`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            content: aiResponse,
-            role: 'assistant',
-          }),
-        });
+        // 登录用户才保存到数据库
+        if (isSignedIn) {
+          // 流式响应结束后，保存最终消息
+          await fetch(`/api/conversations/${currentConversationId}/messages`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              content: aiResponse,
+              role: 'assistant',
+            }),
+          });
 
-        // 获取最终的消息列表
-        await fetchMessages(currentConversationId);
+          // 获取最终的消息列表
+          await fetchMessages(currentConversationId);
+        }
       }
     } catch (error) {
       console.error('Error:', error);
@@ -194,6 +218,11 @@ export default function ChatArea({ conversationId, onConversationCreated }: Chat
             <div className="text-gray-300 text-center">
               <h1 className="text-2xl font-semibold mb-8">DeepSeek AI</h1>
               <p className="text-lg">开始对话吧！</p>
+              {!isSignedIn && (
+                <p className="text-gray-400 mt-4 text-sm max-w-md mx-auto">
+                  您当前处于访客模式。对话不会被保存，页面刷新后将丢失。登录以保存对话历史。
+                </p>
+              )}
             </div>
           ) : (
             <div className="space-y-6">
@@ -244,6 +273,9 @@ export default function ChatArea({ conversationId, onConversationCreated }: Chat
           </div>
           <div className="text-xs text-center text-gray-400 mt-2">
             DeepSeek AI 可能会产生错误信息。考虑验证重要信息。
+            {!isSignedIn && (
+              <span className="block mt-1">您处于访客模式，此对话不会被保存。</span>
+            )}
           </div>
         </form>
       </div>

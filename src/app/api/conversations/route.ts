@@ -37,36 +37,4 @@ export async function POST(request: Request) {
         console.error('Error creating conversation:', error);
         return new NextResponse('Internal Server Error', { status: 500 });
     }
-}
-
-// 删除会话
-export async function DELETE(request: Request) {
-    try {
-        const { userId } = await auth();
-        if (!userId) {
-            return new NextResponse('Unauthorized', { status: 401 });
-        }
-
-        const { searchParams } = new URL(request.url);
-        const conversationId = searchParams.get('id');
-        
-        if (!conversationId) {
-            return new NextResponse('Conversation ID is required', { status: 400 });
-        }
-
-        // 首先验证该会话是否属于当前用户
-        const conversations = dbUtils.getConversations(userId);
-        const conversation = conversations.find(c => c.id === conversationId);
-        
-        if (!conversation) {
-            return new NextResponse('Conversation not found', { status: 404 });
-        }
-
-        // 删除会话
-        dbUtils.deleteConversation(conversationId);
-        return new NextResponse(null, { status: 204 });
-    } catch (error) {
-        console.error('Error deleting conversation:', error);
-        return new NextResponse('Internal Server Error', { status: 500 });
-    }
 } 

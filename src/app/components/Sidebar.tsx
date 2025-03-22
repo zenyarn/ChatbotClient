@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@clerk/nextjs';
-import { Plus, Trash2, Settings } from 'lucide-react';
+import { Plus, Trash2, Settings, LogOut } from 'lucide-react';
 
 interface Conversation {
   id: string;
@@ -17,13 +17,18 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ selectedConversation, onSelectConversation }: SidebarProps) {
-  const { isLoaded, userId } = useAuth();
+  const { isLoaded, userId, signOut } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
 
   // 获取会话列表
   const fetchConversations = async () => {
+    if (!isLoaded || !userId) {
+      setConversations([]);
+      return;
+    }
+    
     try {
       const response = await fetch('/api/conversations');
       if (response.ok) {
@@ -89,9 +94,28 @@ export default function Sidebar({ selectedConversation, onSelectConversation }: 
     }
   };
 
+  // 处理登出
+  const handleSignOut = async () => {
+    try {
+      // 清空本地会话列表
+      setConversations([]);
+      // 清除选中的会话（允许继续在游客模式下聊天）
+      onSelectConversation('');
+      // 执行登出
+      await signOut();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
   useEffect(() => {
-    if (isLoaded && userId) {
-      fetchConversations();
+    if (isLoaded) {
+      if (userId) {
+        fetchConversations();
+      } else {
+        // 如果没有用户ID，清空会话列表
+        setConversations([]);
+      }
     }
   }, [isLoaded, userId]);
 
@@ -157,11 +181,17 @@ export default function Sidebar({ selectedConversation, onSelectConversation }: 
         </div>
       </div>
 
-      {/* 底部设置按钮 */}
-      <div className="p-4 border-t border-gray-700 mt-auto flex-shrink-0 bg-[#202123]">
+      {/* 底部按钮区域 */}
+      <div className="p-4 border-t border-gray-700 mt-auto flex-shrink-0 bg-[#202123] space-y-2">
         <button className="w-full text-gray-300 hover:bg-gray-700 rounded-lg p-2 flex items-center gap-2">
           <Settings size={20} />
           设置
+        </button>
+        <button 
+          onClick={handleSignOut}
+          className="w-full text-gray-300 hover:bg-gray-700 rounded-lg p-2 flex items-center gap-2 text-left">
+          <LogOut size={20} />
+          登出
         </button>
       </div>
     </aside>
