@@ -15,6 +15,11 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
+// 添加getPool函数，返回现有连接池
+function getPool(): Pool {
+  return pool;
+}
+
 // 连接成功时打印信息
 pool.on('connect', () => {
   console.log('PostgreSQL连接初始化成功');
@@ -62,7 +67,16 @@ const asyncUtils = {
         [userId]
       );
       
-      const conversations = result.rows.map(row => ({
+      // 添加显式类型声明
+      interface RowType {
+        id: string;
+        userId: string;
+        title: string;
+        createdAt: string;
+        updatedAt: string;
+      }
+      
+      const conversations = result.rows.map((row: RowType) => ({
         ...row,
         createdAt: Number(row.createdAt),
         updatedAt: Number(row.updatedAt)
@@ -279,3 +293,6 @@ export const dbUtils: DbUtils = {
     }
   }
 };
+
+// 最后导出getPool函数，确保它可以在模块外被访问
+export { getPool };
