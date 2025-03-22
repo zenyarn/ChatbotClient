@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { dbUtils } from '@/lib/db';
 
-// 获取用户的所有会话
+// 获取所有会话
 export async function GET() {
     try {
         const { userId } = await auth();
@@ -10,16 +10,16 @@ export async function GET() {
             return new NextResponse('Unauthorized', { status: 401 });
         }
 
-        const conversations = dbUtils.getConversations(userId);
+        const conversations = await dbUtils.getConversations(userId);
         return NextResponse.json(conversations);
     } catch (error) {
-        console.error('Error fetching conversations:', error);
-        return new NextResponse('Internal Server Error', { status: 500 });
+        console.error(`获取会话失败:`, error);
+        return new NextResponse('获取会话失败', { status: 500 });
     }
 }
 
 // 创建新会话
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     try {
         const { userId } = await auth();
         if (!userId) {
@@ -31,10 +31,10 @@ export async function POST(request: Request) {
             return new NextResponse('Title is required', { status: 400 });
         }
 
-        const conversationId = dbUtils.createConversation(userId, title);
+        const conversationId = await dbUtils.createConversation(userId, title);
         return NextResponse.json({ id: conversationId });
     } catch (error) {
-        console.error('Error creating conversation:', error);
-        return new NextResponse('Internal Server Error', { status: 500 });
+        console.error(`创建会话失败:`, error);
+        return new NextResponse('创建会话失败', { status: 500 });
     }
 } 

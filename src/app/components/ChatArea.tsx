@@ -3,15 +3,19 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth, SignInButton } from '@clerk/nextjs';
 import { Send, ThumbsUp, ThumbsDown, Copy, Paperclip, Mic, Loader2, Check } from 'lucide-react';
-import MarkdownRenderer from './MarkdownRenderer';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Message } from '@/lib/db';
+import crypto from 'crypto';
 
-interface Message {
-  id: string;
-  conversationId: string;
-  content: string;
-  role: 'user' | 'assistant';
-  createdAt: number;
-}
+// 简单的 markdown 渲染器组件
+const MarkdownRenderer = ({ content }: { content: string }) => {
+  // 非常简单的实现，仅用于应急
+  return (
+    <div className="whitespace-pre-wrap">
+      {content}
+    </div>
+  );
+};
 
 interface ChatAreaProps {
   conversationId: string | null;
@@ -35,9 +39,12 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
   const [tempSessionId] = useState(`temp-${Date.now()}`);
 
   // 添加新的状态来追踪消息反馈
-  const [messageFeedback, setMessageFeedback] = useState<MessageFeedback[]>([]);
+  const [messageFeedback, setMessageFeedback] = useState<Record<string, 'like' | 'dislike' | null>>({});
   // 添加复制反馈状态
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   // 自动滚动到最新消息
   const scrollToBottom = () => {
@@ -124,6 +131,69 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
     }
   };
 
+  // 修改chatWithAI函数来处理流式响应
+  const chatWithAI = async (message: string): Promise<string> => {
+    try {
+      // 创建一个临时的AI消息ID
+      const tempAiMessageId = `temp-ai-${Date.now()}`;
+      
+      // 添加一个临时的AI回复消息，内容为空
+      setMessages(prev => [...prev, {
+        id: tempAiMessageId,
+        conversationId: conversationId || '',
+        content: '',
+        role: 'assistant',
+        createdAt: Date.now()
+      }]);
+      
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [...messages, { role: 'user', content: message }],
+        }),
+      });
+
+      if (!response.ok) throw new Error('AI响应失败');
+      
+      // 准备处理流式响应
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let aiResponse = '';
+
+      if (reader) {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value);
+            aiResponse += chunk;
+            
+            // 更新临时消息的内容，实现流式显示
+            setMessages(prev => 
+              prev.map(m => 
+                m.id === tempAiMessageId 
+                  ? { ...m, content: aiResponse } 
+                  : m
+              )
+            );
+          }
+        } catch (error) {
+          console.error('读取流时出错:', error);
+        }
+      }
+      
+      return aiResponse;
+    } catch (error) {
+      console.error('AI响应出错:', error);
+      return "抱歉，AI响应出现错误。请稍后再试。";
+    }
+  };
+
+  // 修改handleSubmit函数，简化处理流式响应的逻辑
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
@@ -161,81 +231,46 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
         });
 
         if (!userMessageResponse.ok) throw new Error('Failed to send user message');
+      }
 
-        // 获取更新后的消息列表
+      // 获取 AI 响应 (这里已经会将临时消息添加到UI中)
+      const aiResponse = await chatWithAI(messageToSend);
+      
+      // 保存完整的AI回复到数据库（如果用户已登录）
+      if (isSignedIn && aiResponse) {
+        const saveResponse = await fetch(`/api/conversations/${currentConversationId}/messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            content: aiResponse,
+            role: 'assistant'
+          }),
+        });
+        
+        if (!saveResponse.ok) throw new Error('保存AI回复失败');
+        
+        // 获取真实的消息ID，但不需要更新UI，因为流式响应已经显示完成
+        await saveResponse.json();
+        
+        // 重新获取消息列表，确保数据同步
         await fetchMessages(currentConversationId);
       }
-
-      // 获取 AI 响应
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: [...messages, { role: 'user', content: messageToSend }],
-        }),
-      });
-
-      if (!response.ok) throw new Error('Failed to get AI response');
-
-      // 处理流式响应
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let aiResponse = '';
-
-      if (reader) {
-        // 在本地状态中添加一个临时消息用于显示流式响应
-        setMessages(prevMessages => [
-          ...prevMessages,
-          {
-            id: 'temp-' + Date.now(),
-            conversationId: currentConversationId,
-            content: '',
-            role: 'assistant',
-            createdAt: Date.now(),
-          }
-        ]);
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          const chunk = decoder.decode(value);
-          aiResponse += chunk;
-
-          // 更新本地状态显示实时响应
-          setMessages(prevMessages => {
-            const updatedMessages = [...prevMessages];
-            const lastMessage = updatedMessages[updatedMessages.length - 1];
-            if (lastMessage && lastMessage.role === 'assistant') {
-              lastMessage.content = aiResponse;
-            }
-            return updatedMessages;
-          });
-        }
-
-        // 登录用户才保存到数据库
-        if (isSignedIn) {
-          // 流式响应结束后，保存最终消息
-          await fetch(`/api/conversations/${currentConversationId}/messages`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              content: aiResponse,
-              role: 'assistant',
-            }),
-          });
-
-          // 获取最终的消息列表
-          await fetchMessages(currentConversationId);
-        }
-      }
     } catch (error) {
-      console.error('Error:', error);
+      console.error('处理消息失败:', error);
       alert('发送消息失败，请重试');
+      
+      // 回滚，移除最后两条消息（用户消息和AI回复）
+      setMessages(prev => {
+        if (prev.length >= 2) {
+          return prev.slice(0, -2);
+        }
+        if (prev.length === 1) {
+          return [];
+        }
+        return prev;
+      });
     } finally {
       setIsLoading(false);
     }
@@ -252,68 +287,33 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
     }
   }, [conversationId]);
 
-  // 添加处理点赞的函数
+  // 点赞/点踩/复制按钮处理函数
   const handleLike = (messageId: string) => {
-    setMessageFeedback(prev => {
-      // 查找当前消息的反馈状态
-      const existingFeedback = prev.find(f => f.messageId === messageId);
-      
-      if (existingFeedback) {
-        // 如果已有反馈状态，则切换点赞状态
-        return prev.map(f => 
-          f.messageId === messageId 
-            ? { ...f, liked: !f.liked, disliked: false } // 确保点赞时取消点踩
-            : f
-        );
-      } else {
-        // 如果没有反馈状态，则添加一个新的
-        return [...prev, { messageId, liked: true, disliked: false }];
-      }
-    });
+    setMessageFeedback(prev => ({
+      ...prev,
+      [messageId]: prev[messageId] === 'like' ? null : 'like'
+    }));
   };
 
-  // 处理点踩的函数
   const handleDislike = (messageId: string) => {
-    setMessageFeedback(prev => {
-      const existingFeedback = prev.find(f => f.messageId === messageId);
-      
-      if (existingFeedback) {
-        return prev.map(f => 
-          f.messageId === messageId 
-            ? { ...f, disliked: !f.disliked, liked: false } // 确保点踩时取消点赞
-            : f
-        );
-      } else {
-        return [...prev, { messageId, liked: false, disliked: true }];
-      }
+    setMessageFeedback(prev => ({
+      ...prev,
+      [messageId]: prev[messageId] === 'dislike' ? null : 'dislike'
+    }));
+  };
+
+  const handleCopy = (messageId: string, content: string) => {
+    navigator.clipboard.writeText(content).then(() => {
+      setCopiedMessageId(messageId);
+      // 3秒后重置复制状态
+      setTimeout(() => setCopiedMessageId(null), 3000);
     });
   };
 
-  // 处理复制的函数
-  const handleCopy = (messageId: string, content: string) => {
-    // 复制文本到剪贴板
-    navigator.clipboard.writeText(content)
-      .then(() => {
-        // 设置复制成功的消息ID
-        setCopiedMessageId(messageId);
-        
-        // 2秒后重置复制状态
-        setTimeout(() => {
-          setCopiedMessageId(null);
-        }, 2000);
-      })
-      .catch(err => {
-        console.error('Failed to copy text: ', err);
-      });
-  };
-
-  // 检查消息反馈状态的辅助函数
-  const getMessageFeedback = (messageId: string) => {
-    return messageFeedback.find(f => f.messageId === messageId) || { 
-      messageId, 
-      liked: false, 
-      disliked: false 
-    };
+  // 显示简单成功提示的函数
+  const showToast = (message: string) => {
+    // 简单的替代toast的方式
+    alert(message);
   };
 
   return (
@@ -365,7 +365,7 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
             <div className="space-y-6">
               {messages.map((message, index) => {
                 // 获取当前消息的反馈状态
-                const feedback = getMessageFeedback(message.id);
+                const feedback = messageFeedback[message.id] || null;
                 const isCopied = copiedMessageId === message.id;
                 
                 return (
@@ -409,7 +409,7 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
                             <button 
                               onClick={() => handleLike(message.id)}
                               className={`p-1 rounded transition-colors ${
-                                feedback.liked 
+                                feedback === 'like' 
                                   ? 'text-blue-500 bg-blue-500 bg-opacity-10' 
                                   : 'text-gray-500 hover:text-white'
                               }`}
@@ -421,7 +421,7 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
                             <button 
                               onClick={() => handleDislike(message.id)}
                               className={`p-1 rounded transition-colors ${
-                                feedback.disliked 
+                                feedback === 'dislike' 
                                   ? 'text-red-500 bg-red-500 bg-opacity-10' 
                                   : 'text-gray-500 hover:text-white'
                               }`}

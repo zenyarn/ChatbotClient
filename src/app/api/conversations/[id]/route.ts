@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { dbUtils } from '@/lib/db';
 
@@ -14,7 +14,7 @@ export async function GET(
         }
 
         // 验证会话所有权
-        const conversations = dbUtils.getConversations(userId);
+        const conversations = await dbUtils.getConversations(userId);
         const conversation = conversations.find(c => c.id === params.id);
         
         if (!conversation) {
@@ -30,7 +30,7 @@ export async function GET(
 
 // 删除特定会话
 export async function DELETE(
-    request: Request,
+    request: NextRequest,
     { params }: { params: { id: string } }
 ) {
     try {
@@ -39,59 +39,50 @@ export async function DELETE(
             return new NextResponse('Unauthorized', { status: 401 });
         }
 
-        const conversationId = params.id;
-        
-        if (!conversationId) {
-            return new NextResponse('Conversation ID is required', { status: 400 });
-        }
-
         // 验证会话所有权
-        const conversations = dbUtils.getConversations(userId);
-        const conversation = conversations.find(c => c.id === conversationId);
+        const conversations = await dbUtils.getConversations(userId);
+        const conversation = conversations.find(c => c.id === params.id);
         
         if (!conversation) {
             return new NextResponse('Conversation not found', { status: 404 });
         }
 
-        // 删除会话
-        dbUtils.deleteConversation(conversationId);
+        await dbUtils.deleteConversation(params.id);
         return new NextResponse(null, { status: 204 });
     } catch (error) {
-        console.error('Error deleting conversation:', error);
-        return new NextResponse('Internal Server Error', { status: 500 });
+        console.error(`删除会话失败:`, error);
+        return new NextResponse('删除会话失败', { status: 500 });
     }
 }
 
 // 添加PATCH方法用于更新会话标题
 export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
+    request: NextRequest,
+    { params }: { params: { id: string } }
 ) {
-  try {
-    const { userId } = await auth();
-    if (!userId) {
-      return new NextResponse('Unauthorized', { status: 401 });
-    }
+    try {
+        const { userId } = await auth();
+        if (!userId) {
+            return new NextResponse('Unauthorized', { status: 401 });
+        }
 
-    const { title } = await request.json();
-    if (!title) {
-      return new NextResponse('Title is required', { status: 400 });
-    }
+        // 验证会话所有权
+        const conversations = await dbUtils.getConversations(userId);
+        const conversation = conversations.find(c => c.id === params.id);
+        
+        if (!conversation) {
+            return new NextResponse('Conversation not found', { status: 404 });
+        }
 
-    // 验证会话所有权
-    const conversations = dbUtils.getConversations(userId);
-    const conversation = conversations.find(c => c.id === params.id);
-    
-    if (!conversation) {
-      return new NextResponse('Conversation not found', { status: 404 });
-    }
+        const { title } = await request.json();
+        if (!title) {
+            return new NextResponse('Title is required', { status: 400 });
+        }
 
-    // 更新会话标题
-    dbUtils.updateConversationTitle(params.id, title);
-    
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Error updating conversation:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
-  }
+        await dbUtils.updateConversationTitle(params.id, title);
+        return NextResponse.json({ updated: true });
+    } catch (error) {
+        console.error(`更新会话标题失败:`, error);
+        return new NextResponse('更新会话标题失败', { status: 500 });
+    }
 } 

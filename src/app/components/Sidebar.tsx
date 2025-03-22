@@ -3,13 +3,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { Plus, Trash2, Settings, LogOut, Check, X } from 'lucide-react';
-
-interface Conversation {
-  id: string;
-  title: string;
-  userId: string;
-  createdAt: number;
-}
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { Conversation } from '@/lib/db';
+import { IoMdAdd, IoMdSettings, IoMdTrash } from 'react-icons/io';
+import { IoExitOutline } from 'react-icons/io5';
+import Link from 'next/link';
+import { toast } from 'react-hot-toast';
 
 interface SidebarProps {
   selectedConversation: string | null;
@@ -32,6 +31,11 @@ export default function Sidebar({
   const [editingTitle, setEditingTitle] = useState(''); // 存储编辑中的标题
   const editInputRef = useRef<HTMLInputElement>(null); // 引用编辑输入框
   const latestConversationRef = useRef<Conversation | null>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentId = searchParams.get('id');
+  const [loading, setLoading] = useState(true);
   
   // 获取会话列表
   const fetchConversations = async () => {
@@ -41,6 +45,7 @@ export default function Sidebar({
     }
     
     try {
+      setLoading(true);
       const response = await fetch('/api/conversations');
       if (response.ok) {
         const data = await response.json();
@@ -48,6 +53,9 @@ export default function Sidebar({
       }
     } catch (error) {
       console.error('Error fetching conversations:', error);
+      toast.error('获取会话列表失败');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -107,7 +115,6 @@ export default function Sidebar({
   // 新增自动创建对话的函数
   const createNewConversation = async () => {
     try {
-      // 使用时间戳创建默认会话名称
       const timestamp = new Date().toLocaleString('zh-CN', {
         year: 'numeric',
         month: '2-digit',
@@ -115,14 +122,14 @@ export default function Sidebar({
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit'
-      });
+      }).replace(/\//g, '-');
       
       const response = await fetch('/api/conversations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ title: `${timestamp}` }),
+        body: JSON.stringify({ title: timestamp }),
       });
 
       if (!response.ok) throw new Error('Failed to create conversation');
@@ -133,9 +140,12 @@ export default function Sidebar({
       onSelectConversation(newConversation.id);
       
       // 重新获取会话列表以确保数据同步
-      fetchConversations();
+      await fetchConversations();
+      // 导航到新会话
+      router.push(`/?id=${newConversation.id}`);
     } catch (error) {
       console.error('Error creating conversation:', error);
+      toast.error('创建会话失败');
     }
   };
 
@@ -171,11 +181,16 @@ export default function Sidebar({
         if (id === selectedConversation && onConversationDeleted) {
           onConversationDeleted(id);
         }
+        // 如果删除的是当前会话，则导航到首页
+        if (currentId === id) {
+          router.push('/');
+        }
       } else {
         console.error('Failed to delete conversation');
       }
     } catch (error) {
       console.error('Error deleting conversation:', error);
+      toast.error('删除会话失败');
     } finally {
       setEditingId(null);
     }
