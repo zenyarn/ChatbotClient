@@ -125,7 +125,7 @@ export default function Home() {
   }, [selectedConversation]);
 
   return (
-    <div className="flex h-screen bg-[#1E1E1E] overflow-hidden">
+    <div className="flex h-screen overflow-hidden">
       {/* 侧边栏 - 根据展开状态设置宽度 */}
       <div 
         className={`${isSidebarExpanded ? 'w-64' : 'w-0'} flex-shrink-0 border-r border-gray-800 bg-[#1A1A1A] flex flex-col h-full transition-all duration-300`}
@@ -187,7 +187,7 @@ export default function Home() {
       )}
       
       {/* 主聊天区域 */}
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col overflow-hidden">
         {/* 顶部操作栏 */}
         <div className="h-14 border-b border-gray-800 flex items-center justify-between px-4">
           <div className="flex items-center">
