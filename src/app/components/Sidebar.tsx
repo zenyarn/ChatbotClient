@@ -120,7 +120,7 @@ export default function Sidebar({
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ title: `对话 ${timestamp}` }),
+        body: JSON.stringify({ title: `${timestamp}` }),
       });
 
       if (!response.ok) throw new Error('Failed to create conversation');
@@ -240,14 +240,9 @@ export default function Sidebar({
   }, [newConversation]);
 
   return (
-    <aside className="w-64 bg-[#202123] h-screen flex flex-col fixed">
-      {/* 顶部标题 */}
-      <div className="p-4 border-b border-gray-700 flex-shrink-0">
-        <h1 className="text-white text-xl font-semibold">DeepSeek</h1>
-      </div>
-      
+    <div className="flex-1 flex flex-col overflow-hidden">
       {/* 对话历史列表 */}
-      <div className="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+      <div className="flex-1 overflow-y-auto p-2 bg-[#1A1A1A]">
         <div className="space-y-2">
           {/* 新建会话按钮 */}
           <button
@@ -316,20 +311,6 @@ export default function Sidebar({
           ))}
         </div>
       </div>
-
-      {/* 底部按钮区域 */}
-      <div className="p-4 border-t border-gray-700 mt-auto flex-shrink-0 bg-[#202123] space-y-2">
-        <button className="w-full text-gray-300 hover:bg-gray-700 rounded-lg p-2 flex items-center gap-2">
-          <Settings size={20} />
-          设置
-        </button>
-        <button 
-          onClick={handleSignOut}
-          className="w-full text-gray-300 hover:bg-gray-700 rounded-lg p-2 flex items-center gap-2 text-left">
-          <LogOut size={20} />
-          登出
-        </button>
-      </div>
-    </aside>
+    </div>
   );
 } 

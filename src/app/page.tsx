@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/nextjs";
 import ChatArea from './components/ChatArea';
 import Sidebar from './components/Sidebar';
+import { Search, Plus, Share, Settings, LogOut, ChevronRight, ChevronLeft, Menu } from 'lucide-react';
 
 // 定义Conversation类型
 interface Conversation {
@@ -16,55 +17,177 @@ interface Conversation {
 
 export default function Home() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded, signOut } = useAuth();
   const [latestConversation, setLatestConversation] = useState<Conversation | null>(null);
-  const [sidebarUpdateTrigger, setSidebarUpdateTrigger] = useState(0);
+  const [sidebarUpdateTrigger, setSidebarUpdateTrigger] = useState<number>(0);
+  const [conversations, setConversations] = useState<any[]>([]);
   
-  // 处理新建对话
+  // 添加一个专门的状态存储当前显示的标题
+  const [displayTitle, setDisplayTitle] = useState<string>("新对话");
+  
+  // 添加侧边栏展开状态
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
+
+  // 侧边栏切换函数
+  const toggleSidebar = useCallback(() => {
+    setIsSidebarExpanded(prev => !prev);
+  }, []);
+  
+  // 修改获取当前对话标题方法，直接返回displayTitle状态
+  const getCurrentConversationTitle = useCallback(() => {
+    return displayTitle;
+  }, [displayTitle]);
+
+  // 在选中对话变化时更新displayTitle
+  useEffect(() => {
+    if (!selectedConversation) {
+      setDisplayTitle("新对话");
+      return;
+    }
+    
+    // 如果是最新创建的对话，直接使用其标题
+    if (latestConversation && latestConversation.id === selectedConversation) {
+      setDisplayTitle(latestConversation.title);
+      return;
+    }
+    
+    // 否则在conversations数组中查找
+    const conversation = conversations.find(c => c.id === selectedConversation);
+    if (conversation) {
+      setDisplayTitle(conversation.title);
+    }
+  }, [selectedConversation, conversations, latestConversation]);
+
+  // 处理新建对话 - 关键修改
   const handleConversationCreated = useCallback((conversationId: string, conversation: Conversation) => {
+    // 先更新显示标题，确保立即显示
+    setDisplayTitle(conversation.title);
+    
+    // 再更新其他状态
     setSelectedConversation(conversationId);
-    // 直接设置最新对话，不需要触发fetch
     setLatestConversation(conversation);
+    setSidebarUpdateTrigger(prev => prev + 1);
+    setConversations(prev => [conversation, ...prev]);
   }, []);
 
   // 增强登出处理逻辑
   useEffect(() => {
     if (isLoaded) {
       if (!isSignedIn) {
-        // 用户登出时：
-        // 1. 清除选中的对话
         setSelectedConversation(null);
-        // 2. 触发侧边栏更新（虽然在登出状态下不会显示）
+        setDisplayTitle("新对话"); // 登出时重置标题
         setSidebarUpdateTrigger(prev => prev + 1);
       }
     }
   }, [isSignedIn, isLoaded]);
 
+  // 获取所有对话
+  const fetchConversations = async () => {
+    if (!isSignedIn) {
+      setConversations([]);
+      return;
+    }
+    
+    try {
+      const response = await fetch('/api/conversations');
+      if (response.ok) {
+        const data = await response.json();
+        setConversations(data);
+        
+        // 如果有选中的对话，确保其标题正确显示
+        if (selectedConversation) {
+          const currentConv = data.find((c: Conversation) => c.id === selectedConversation);
+          if (currentConv) {
+            setDisplayTitle(currentConv.title);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch conversations:', error);
+    }
+  };
+
+  // 添加一个useEffect来获取所有对话列表
+  useEffect(() => {
+    if (isSignedIn) {
+      fetchConversations();
+    }
+  }, [isSignedIn, sidebarUpdateTrigger]);
+
   return (
-    <div className="flex h-screen bg-[#1a1a1a]">
-      {/* 侧边栏只在登录时显示 */}
-      <SignedIn>
-        <Sidebar 
-          selectedConversation={selectedConversation}
-          onSelectConversation={setSelectedConversation}
-          newConversation={latestConversation}
-        />
-      </SignedIn>
-      
-      <main className={`flex-1 flex flex-col bg-[#1a1a1a] ${isSignedIn ? 'ml-64' : ''}`}>
-        <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-[#1a1a1a]">
-          {/* 未登录时显示产品标题在左侧 */}
-          <div>
-            <SignedOut>
-              <h1 className="text-white text-xl font-semibold">DeepSeek 聊天</h1>
-            </SignedOut>
-            {/* 登录状态下左侧留空 */}
+    <div className="flex h-screen bg-[#1E1E1E] overflow-hidden">
+      {/* 侧边栏 - 根据展开状态设置宽度 */}
+      <div 
+        className={`${isSidebarExpanded ? 'w-64' : 'w-0'} flex-shrink-0 border-r border-gray-800 bg-[#1A1A1A] flex flex-col h-full transition-all duration-300`}
+      >
+        {/* 顶部DeepSeek标识 */}
+        {isSidebarExpanded && (
+          <div className="p-4 border-b border-gray-800 flex items-center">
+            <h1 className="text-white text-lg font-semibold">DeepSeek</h1>
+          </div>
+        )}
+        
+        {/* 侧边栏内容区域 - 带有滚动条 */}
+        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+          <Sidebar 
+            selectedConversation={selectedConversation}
+            onSelectConversation={(id) => {
+              setSelectedConversation(id);
+              // 当切换对话时，也尝试立即更新标题
+              const conv = conversations.find(c => c.id === id);
+              if (conv) {
+                setDisplayTitle(conv.title);
+              }
+            }}
+            updateTrigger={sidebarUpdateTrigger}
+            newConversation={latestConversation}
+          />
+        </div>
+        
+        {/* 底部设置按钮 */}
+        {isSidebarExpanded && (
+          <div className="p-4 border-t border-gray-800">
+            <button 
+              className="w-full flex items-center gap-2 text-gray-300 hover:bg-gray-800 p-2 rounded-md transition-colors"
+              onClick={() => {/* 设置功能暂未实现 */}}
+            >
+              <Settings size={16} />
+              <span className="text-sm">设置</span>
+            </button>
             <SignedIn>
-              <div></div>
+              <button 
+                onClick={() => signOut?.()}
+                className="mt-2 w-full flex items-center gap-2 text-gray-300 hover:bg-gray-800 p-2 rounded-md transition-colors"
+              >
+                <LogOut size={16} />
+                <span className="text-sm">登出</span>
+              </button>
             </SignedIn>
           </div>
-          
-          {/* 右侧显示用户按钮和登录选项 */}
+        )}
+      </div>
+      
+      {/* 侧边栏折叠时的悬停区域 */}
+      {!isSidebarExpanded && (
+        <div 
+          className="absolute left-0 top-0 bottom-0 w-5 bg-transparent z-10 cursor-pointer hover:bg-gray-800 hover:bg-opacity-20"
+          onClick={toggleSidebar}
+        />
+      )}
+      
+      {/* 主聊天区域 */}
+      <main className="flex-1 flex flex-col">
+        {/* 顶部操作栏 */}
+        <div className="h-14 border-b border-gray-800 flex items-center justify-between px-4">
+          <div className="flex items-center">
+            {/* 侧边栏伸缩按钮 */}
+            <button 
+              onClick={toggleSidebar}
+              className="p-2 mr-3 text-gray-400 hover:text-white rounded-md hover:bg-gray-800 transition-colors"
+            >
+              {isSidebarExpanded ? <ChevronLeft size={18} /> : <Menu size={18} />}
+            </button>
+          </div>
           <div className="flex items-center gap-2">
             <SignedIn>
               <UserButton 
@@ -79,24 +202,16 @@ export default function Home() {
               />
             </SignedIn>
             <SignedOut>
-              <div className="flex items-center space-x-2">
-                <p className="text-gray-400 text-sm hidden md:block">登录以保存对话历史</p>
-                <SignInButton>
-                  <button className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">
-                    登录
-                  </button>
-                </SignInButton>
-                <SignUpButton>
-                  <button className="border border-gray-600 hover:bg-gray-800 text-white px-4 py-2 rounded-lg text-sm transition-colors">
-                    注册
-                  </button>
-                </SignUpButton>
-              </div>
+              <SignInButton>
+                <button className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md transition-colors">
+                  登录
+                </button>
+              </SignInButton>
             </SignedOut>
           </div>
         </div>
         
-        {/* 所有用户都显示聊天区域 */}
+        {/* 聊天区域 */}
         <ChatArea
           conversationId={selectedConversation}
           onConversationCreated={handleConversationCreated}

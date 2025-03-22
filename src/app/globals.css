@@ -7,7 +7,8 @@ body {
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -15,20 +16,106 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #4B5563;
-  border-radius: 4px;
+  background: #4b5563;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #6B7280;
+  background: #6b7280;
 }
 
 /* 添加淡入动画 */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-fadeIn {
   animation: fadeIn 0.3s ease-out;
+}
+
+/* 代码块样式 */
+.prose pre {
+  background-color: #1e1e1e;
+  border-radius: 6px;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+.prose code {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+/* 消息动画 */
+.message-animation {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* 修改滚动条样式，确保在所有容器中统一 */
+.overflow-y-auto {
+  scrollbar-width: thin;
+  scrollbar-color: #4b5563 transparent;
+}
+
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background-color: #4b5563;
+  border-radius: 20px;
+}
+
+/* 确保滚动平滑 */
+.scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+/* 添加侧边栏过渡动画 */
+.sidebar-transition {
+  transition: width 0.3s ease-in-out;
+}
+
+/* 为侧边栏折叠时的悬停区添加微妙提示效果 */
+.sidebar-hover-hint {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background-color: transparent;
+  transition: background-color 0.2s;
+}
+
+.sidebar-hover-hint:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 滚动条样式 */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(107, 114, 128, 0.5);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.7);
+}
+
+/* 如果需要滚动区域支持火狐浏览器 */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(107, 114, 128, 0.5) transparent;
 }

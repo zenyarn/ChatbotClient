@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useAuth } from '@clerk/nextjs';
-import { Send } from 'lucide-react';
+import { useAuth, SignInButton } from '@clerk/nextjs';
+import { Send, ThumbsUp, ThumbsDown, Copy, Paperclip, Mic, Loader2 } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -229,37 +229,98 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-[#222222] border-l border-gray-700">
+    <div className="flex-1 flex flex-col bg-[#1E1E1E] h-full overflow-hidden">
       {/* 聊天内容区域 */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto py-8">
+      <div className="flex-1 overflow-y-auto bg-[#1E1E1E] scroll-smooth">
+        <div className="max-w-3xl mx-auto py-8 px-4">
           {messages.length === 0 ? (
-            <div className="text-gray-300 text-center">
-              <h1 className="text-2xl font-semibold mb-8">DeepSeek AI</h1>
-              <p className="text-lg">开始对话吧！</p>
+            <div className="text-center pt-10">
+              <h1 className="text-3xl font-bold text-white mb-6">DeepSeek AI</h1>
+              <p className="text-xl text-gray-300 mb-10">有什么可以帮助您？</p>
               {!isSignedIn && (
-                <p className="text-gray-400 mt-4 text-sm max-w-md mx-auto">
-                  您当前处于访客模式。对话不会被保存，页面刷新后将丢失。登录以保存对话历史。
-                </p>
+                <div className="max-w-md mx-auto">
+                  <p className="text-gray-400 text-sm border border-gray-800 rounded-lg p-4 bg-gray-900 bg-opacity-50">
+                    您当前处于访客模式。对话不会被保存，页面刷新后将丢失。<br/>
+                    <SignInButton>
+                      <span className="text-blue-500 hover:underline cursor-pointer">登录</span>
+                    </SignInButton>
+                    &nbsp;以保存对话历史。
+                  </p>
+                </div>
               )}
+              
+              {/* 快速提示卡片 */}
+              <div className="grid grid-cols-2 gap-3 mt-8 max-w-2xl mx-auto">
+                {[
+                  "给我写一个Python快速排序算法",
+                  "解释量子计算的基本原理",
+                  "帮我起草一封工作邮件",
+                  "创建一个健康饮食的周计划"
+                ].map(prompt => (
+                  <button 
+                    key={prompt}
+                    onClick={() => {
+                      setNewMessage(prompt);
+                      setTimeout(() => {
+                        const form = document.querySelector('form');
+                        if (form) form.dispatchEvent(new Event('submit', { cancelable: true }));
+                      }, 100);
+                    }}
+                    className="text-left p-4 bg-[#202123] rounded-xl hover:bg-[#2b2c2f] transition-colors text-sm text-gray-300"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="space-y-6">
-              {messages.map((message) => (
+              {messages.map((message, index) => (
                 <div
                   key={message.id}
-                  className={`p-4 ${
-                    message.role === 'user' 
-                      ? 'bg-[#1A1B1E]'
-                      : 'bg-[#2A2B32]'
-                  }`}
+                  className={`flex items-start ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
-                  <div className="max-w-2xl mx-auto">
-                    <div className="font-semibold mb-2">
-                      {message.role === 'user' ? '你' : 'DeepSeek'}
-                    </div>
-                    <div className="text-gray-300 whitespace-pre-wrap">
-                      {message.content}
+                  <div className={`max-w-[85%] ${message.role === 'user' ? 'order-2' : 'order-1'}`}>
+                    <div className={`flex items-start gap-3 ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                      {/* 头像 */}
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 
+                        ${message.role === 'user' 
+                          ? 'bg-gray-700 bg-opacity-80 text-gray-300' 
+                          : 'bg-gray-800 bg-opacity-80 text-gray-200'}`}>
+                        {message.role === 'user' 
+                          ? <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                          : <span className="text-xs font-semibold">AI</span>}
+                      </div>
+                      
+                      {/* 消息内容 */}
+                      <div>
+                        <div className={`p-4 ${
+                          message.role === 'user' 
+                            ? 'bg-[#262626] text-white rounded-2xl rounded-tr-sm'
+                            : 'bg-[#2D2D2D] text-white rounded-2xl rounded-tl-sm'
+                        }`}>
+                          <div className="prose prose-invert max-w-none">
+                            <div className="whitespace-pre-wrap">
+                              {message.content}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* 交互按钮 */}
+                        {message.role === 'assistant' && (
+                          <div className="flex items-center mt-2 gap-2 px-1">
+                            <button className="p-1 text-gray-500 hover:text-white rounded transition-colors">
+                              <ThumbsUp size={14} />
+                            </button>
+                            <button className="p-1 text-gray-500 hover:text-white rounded transition-colors">
+                              <ThumbsDown size={14} />
+                            </button>
+                            <button className="p-1 text-gray-500 hover:text-white rounded transition-colors">
+                              <Copy size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -271,32 +332,56 @@ export default function ChatArea({ conversationId, onConversationCreated, isSign
       </div>
       
       {/* 输入框区域 */}
-      <div className="border-t border-gray-700 bg-[#222222] p-4">
-        <form onSubmit={handleSubmit} className="max-w-2xl mx-auto">
-          <div className="relative">
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="输入任何问题..."
-              className="w-full bg-[#2A2B32] text-white rounded-lg pl-4 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-gray-500 border border-gray-700"
-              disabled={isLoading}
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !newMessage.trim()}
-              className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-[#2A2B32] p-1 rounded disabled:opacity-50"
-            >
-              <Send className="w-5 h-5 text-gray-400" />
-            </button>
-          </div>
-          <div className="text-xs text-center text-gray-400 mt-2">
-            DeepSeek AI 可能会产生错误信息。考虑验证重要信息。
-            {!isSignedIn && (
-              <span className="block mt-1">您处于访客模式，此对话不会被保存。</span>
-            )}
-          </div>
-        </form>
+      <div className="border-t border-gray-800 bg-[#1E1E1E] p-3">
+        <div className="max-w-3xl mx-auto">
+          <form onSubmit={handleSubmit} className="relative">
+            <div className="rounded-lg border border-gray-700 bg-[#252525] overflow-hidden focus-within:border-gray-500 transition-colors">
+              <textarea
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="输入消息..."
+                className="w-full bg-transparent text-white p-3 resize-none min-h-[40px] max-h-[120px] focus:outline-none scroll-smooth"
+                rows={1}
+                disabled={isLoading}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (newMessage.trim()) handleSubmit(e);
+                  }
+                }}
+              />
+              
+              <div className="py-1 px-2 flex items-center justify-between border-t border-gray-700">
+                <div className="flex items-center gap-1">
+                  <button type="button" className="p-1 text-gray-500 hover:text-white rounded transition-colors">
+                    <Paperclip size={14} />
+                  </button>
+                  <button type="button" className="p-1 text-gray-500 hover:text-white rounded transition-colors">
+                    <Mic size={14} />
+                  </button>
+                </div>
+                <button
+                  type="submit"
+                  disabled={isLoading || !newMessage.trim()}
+                  className={`p-1.5 rounded-md ${
+                    newMessage.trim() && !isLoading
+                      ? 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                      : 'bg-gray-800 text-gray-500'
+                  } transition-colors`}
+                >
+                  {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                </button>
+              </div>
+            </div>
+            
+            <div className="text-xs text-center text-gray-600 mt-1">
+              DeepSeek AI 可能会产生错误信息。考虑验证重要信息。
+              {!isSignedIn && (
+                <span className="block mt-0.5">您处于访客模式，此对话不会被保存。</span>
+              )}
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
