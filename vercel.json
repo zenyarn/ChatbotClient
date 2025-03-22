@@ -1,6 +1,9 @@
 {
   "functions": {
-    "api/chat/*.ts": {
+    "src/app/api/**/*.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/chat/route.ts": {
       "maxDuration": 60
     }
   }
